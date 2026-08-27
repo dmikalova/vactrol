@@ -47,6 +47,7 @@ type Target struct {
 	hasMaxPower bool
 	damaged     bool
 	onFlank     bool
+	notOnFlank  bool
 }
 
 // WithTrait narrows the target to cards that have the given trait, e.g.
@@ -74,6 +75,13 @@ func (t Target) Damaged() Target {
 // leftmost or rightmost creature).
 func (t Target) OnFlank() Target {
 	t.onFlank = true
+	return t
+}
+
+// NotOnFlank narrows the target to creatures that are not on a flank of their
+// battleline (neither its leftmost nor rightmost creature).
+func (t Target) NotOnFlank() Target {
+	t.notOnFlank = true
 	return t
 }
 
@@ -116,6 +124,9 @@ func (t Target) Text() string {
 	if t.hasMaxPower {
 		phrase += fmt.Sprintf(" with power %d or lower", t.maxPower)
 	}
+	if t.notOnFlank {
+		phrase += " that is not on a flank"
+	}
 	return phrase
 }
 
@@ -145,7 +156,7 @@ func (t Target) isChosen() bool {
 // filter narrows ids to those matching the target's trait, power, damaged, and
 // flank filters.
 func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
-	if t.trait == "" && !t.hasMaxPower && !t.damaged && !t.onFlank {
+	if t.trait == "" && !t.hasMaxPower && !t.damaged && !t.onFlank && !t.notOnFlank {
 		return ids
 	}
 	out := make([]LocalID, 0, len(ids))
@@ -160,6 +171,9 @@ func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
 			continue
 		}
 		if t.onFlank && !onFlank(ctx, id) {
+			continue
+		}
+		if t.notOnFlank && onFlank(ctx, id) {
 			continue
 		}
 		out = append(out, id)

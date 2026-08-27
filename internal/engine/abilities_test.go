@@ -217,6 +217,57 @@ func TestBeforeFightTrigger(t *testing.T) {
 	}
 }
 
+func TestAfterDestroyedFightingTrigger(t *testing.T) {
+	gain := GainAember{Amount: 1}
+
+	// The attacker survives and destroys the defender: its ability fires.
+	g := started(t)
+	hunter := g.AddToBattleline(testCreature("hunter", 6, WithAbility(TriggerAfterDestroyedFighting, gain)), 0)
+	prey := g.AddToBattleline(testCreature("prey", 1), 1)
+	before := g.Aember(0)
+	if err := g.Fight(0, hunter, prey); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g.inPlay(prey) {
+		t.Fatal("prey should be destroyed by the fight")
+	}
+	if g.Aember(0) != before+1 {
+		t.Errorf("survivor aember = %d, want %d", g.Aember(0), before+1)
+	}
+
+	// The defender survives while its Hazardous destroys the attacker: the
+	// defender's ability fires (for its own controller).
+	g2 := started(t)
+	weak := g2.AddToBattleline(testCreature("weak", 1), 0)
+	guard := g2.AddToBattleline(NewCard("guard", Sanctum, Creature, Common,
+		WithPower(6), WithHazardous(5), WithAbility(TriggerAfterDestroyedFighting, gain)), 1)
+	before2 := g2.Aember(1)
+	if err := g2.Fight(0, weak, guard); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g2.inPlay(weak) {
+		t.Fatal("weak attacker should be destroyed by Hazardous")
+	}
+	if g2.Aember(1) != before2+1 {
+		t.Errorf("defender-controller aember = %d, want %d", g2.Aember(1), before2+1)
+	}
+
+	// Both combatants survive (Skirmish attacker, tougher defender): no ability.
+	g3 := started(t)
+	brawler := g3.AddToBattleline(testCreature("brawler", 3, WithKeywords(Skirmish), WithAbility(TriggerAfterDestroyedFighting, gain)), 0)
+	wall := g3.AddToBattleline(testCreature("wall", 10), 1)
+	before3 := g3.Aember(0)
+	if err := g3.Fight(0, brawler, wall); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if !g3.inPlay(brawler) || !g3.inPlay(wall) {
+		t.Fatal("both combatants should survive")
+	}
+	if g3.Aember(0) != before3 {
+		t.Errorf("no destruction: aember = %d, want %d (unchanged)", g3.Aember(0), before3)
+	}
+}
+
 func TestStunBehavior(t *testing.T) {
 	g := started(t)
 
@@ -376,5 +427,26 @@ func TestDestroyGivesAmberToOpponent(t *testing.T) {
 	}
 	if g.AmberOn(c) != 0 {
 		t.Errorf("amber not cleared: %d", g.AmberOn(c))
+	}
+}
+
+func TestGrantedAbilitiesFireFromUpgrades(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	host := g.AddToBattleline(testCreature("host", 5), 0)
+	// An upgrade granting its host "Reap: Gain 1 Æmber".
+	attachUpgrade(g, host, NewCard("charm", Shadows, Upgrade, Common,
+		WithStatic(StaticModifier{Granted: []Ability{
+			{Trigger: TriggerAfterReap, Effect: GainAember{Amount: 1}},
+		}})))
+
+	// A non-matching trigger fires nothing granted.
+	g.triggerAbilities(host, TriggerAfterFight, 0, false)
+	if g.Aember(0) != 0 {
+		t.Fatalf("granted Reap ability fired on a Fight trigger; aember = %d", g.Aember(0))
+	}
+	// The matching trigger fires the granted ability with the host as source.
+	g.triggerAbilities(host, TriggerAfterReap, 0, false)
+	if g.Aember(0) != 1 {
+		t.Errorf("granted Reap ability aember = %d, want 1", g.Aember(0))
 	}
 }

@@ -15,7 +15,7 @@ build: ## Build all packages
 test: ## Run all tests
 	go test ./...
 
-cover: ## Run tests and report total coverage
+cover: ## Run tests and report engine coverage (kept at 100%)
 	go test ./internal/engine/ -coverprofile=coverage.out
 	@go tool cover -func=coverage.out | tail -1
 

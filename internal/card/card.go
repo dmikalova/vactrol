@@ -173,14 +173,15 @@ type keywords struct {
 // Trigger groups the ability triggers, e.g. card.Trigger.Play or
 // card.Trigger.AfterForgeKey.
 var Trigger = triggers{
-	Play:                engine.TriggerAfterPlay,
-	Reap:                engine.TriggerAfterReap,
-	Fight:               engine.TriggerAfterFight,
-	BeforeFight:         engine.TriggerBeforeFight,
-	Action:              engine.TriggerAction,
-	AfterForgeKey:       engine.TriggerAfterForgeKey,
-	AfterCreatureEnters: engine.TriggerAfterCreatureEnters,
-	Destroyed:           engine.TriggerDestroyed,
+	Play:                   engine.TriggerAfterPlay,
+	Reap:                   engine.TriggerAfterReap,
+	Fight:                  engine.TriggerAfterFight,
+	BeforeFight:            engine.TriggerBeforeFight,
+	Action:                 engine.TriggerAction,
+	AfterForgeKey:          engine.TriggerAfterForgeKey,
+	AfterCreatureEnters:    engine.TriggerAfterCreatureEnters,
+	Destroyed:              engine.TriggerDestroyed,
+	AfterDestroyedFighting: engine.TriggerAfterDestroyedFighting,
 }
 
 type triggers struct {
@@ -191,7 +192,8 @@ type triggers struct {
 	Action,
 	AfterForgeKey,
 	AfterCreatureEnters,
-	Destroyed engine.Trigger
+	Destroyed,
+	AfterDestroyedFighting engine.Trigger
 }
 
 // Controller and Opponent are the two players an effect can target,

@@ -26,14 +26,15 @@ func TestTargetTextDefault(t *testing.T) {
 
 func TestAllTriggerPrefixes(t *testing.T) {
 	cases := map[Trigger]string{
-		TriggerAfterPlay:           "Play: Gain 1 Æmber.",
-		TriggerAfterReap:           "Reap: Gain 1 Æmber.",
-		TriggerAfterFight:          "Fight: Gain 1 Æmber.",
-		TriggerBeforeFight:         "Before Fight: Gain 1 Æmber.",
-		TriggerAction:              "Action: Gain 1 Æmber.",
-		TriggerDestroyed:           "Destroyed: Gain 1 Æmber.",
-		TriggerAfterForgeKey:       "After you forge a key, gain 1 Æmber.",
-		TriggerAfterCreatureEnters: "After a creature enters play, gain 1 Æmber.",
+		TriggerAfterPlay:              "Play: Gain 1 Æmber.",
+		TriggerAfterReap:              "Reap: Gain 1 Æmber.",
+		TriggerAfterFight:             "Fight: Gain 1 Æmber.",
+		TriggerBeforeFight:            "Before Fight: Gain 1 Æmber.",
+		TriggerAction:                 "Action: Gain 1 Æmber.",
+		TriggerDestroyed:              "Destroyed: Gain 1 Æmber.",
+		TriggerAfterForgeKey:          "After you forge a key, gain 1 Æmber.",
+		TriggerAfterCreatureEnters:    "After a creature enters play, gain 1 Æmber.",
+		TriggerAfterDestroyedFighting: "After a creature is destroyed fighting {self}, gain 1 Æmber.",
 	}
 	for tr, want := range cases {
 		got := RenderAbility(Ability{Trigger: tr, Effect: GainAember{Amount: 1}})
@@ -57,6 +58,7 @@ func TestGeneratedCardText(t *testing.T) {
 		{NewCard("Tabris", Sanctum, Creature, Uncommon, WithPower(6), WithAbility(TriggerAfterFight, CaptureAember{Amount: 1})), "House:  Sanctum\nType:   Creature\nRarity: Uncommon\nPower:  6\n\nFight: Tabris captures 1 Æmber."},
 		{NewCard("Bear", Untamed, Creature, Common, WithPower(5), WithTraits("Beast"), WithAssault(2)), "House:  Untamed\nType:   Creature\nRarity: Common\nPower:  5\nTraits: Beast\n\nAssault 2."},
 		{NewCard("Grub", Untamed, Creature, Rare, WithPower(2), WithHazardous(5)), "House:  Untamed\nType:   Creature\nRarity: Rare\nPower:  2\n\nHazardous 5."},
+		{NewCard("Runner", Shadows, Upgrade, Uncommon, WithStatic(StaticModifier{Granted: []Ability{{Trigger: TriggerAfterReap, Effect: StealAember{Amount: 1}}}})), "House:  Shadows\nType:   Upgrade\nRarity: Uncommon\n\nThis creature gains, \"Reap: Steal 1 Æmber.\""},
 	}
 	for _, tc := range cases {
 		if got := RenderCardText(&tc.def); got != tc.want {

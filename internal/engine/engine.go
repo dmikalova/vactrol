@@ -392,6 +392,17 @@ func (g *Game) fight(attacker, defender LocalID) {
 		g.dealDamage(g.owner(attacker), targets...)
 	}
 	g.triggerAbilities(attacker, TriggerAfterFight, 0, false)
+
+	// "After a creature is destroyed fighting X": when exactly one combatant is
+	// removed by the fight, the survivor's ability fires with the destroyed
+	// creature as `it`.
+	attackerDead, defenderDead := !g.inPlay(attacker), !g.inPlay(defender)
+	if defenderDead && !attackerDead {
+		g.triggerAbilities(attacker, TriggerAfterDestroyedFighting, defender, true)
+	}
+	if attackerDead && !defenderDead {
+		g.triggerAbilities(defender, TriggerAfterDestroyedFighting, attacker, true)
+	}
 }
 
 // applyRawDamage records damage on a creature, letting armor absorb it first. It
@@ -542,12 +553,13 @@ func (g *Game) fireCreatureEnters(entered LocalID) {
 	}
 }
 
-// triggerAbilities resolves every ability on a card matching the trigger.
+// triggerAbilities resolves every ability matching the trigger that the card
+// carries itself or is granted by an attached upgrade.
 func (g *Game) triggerAbilities(src LocalID, trigger Trigger, it LocalID, hasIt bool) {
 	def := g.cat.def(src)
-	for _, ab := range def.Abilities {
+	fire := func(ab Ability) {
 		if ab.Trigger != trigger {
-			continue
+			return
 		}
 		g.logf("%s: %s", def.Name, renderAbilityLine(def, ab))
 		ab.Effect.Resolve(&EffectContext{
@@ -557,5 +569,14 @@ func (g *Game) triggerAbilities(src LocalID, trigger Trigger, it LocalID, hasIt 
 			It:         it,
 			HasIt:      hasIt,
 		})
+	}
+	for _, ab := range def.Abilities {
+		fire(ab)
+	}
+	core := &g.State.Cards[src]
+	for i := 0; i < int(core.UpgradeCount); i++ {
+		for _, ab := range g.cat.def(core.Upgrades[i]).Static.Granted {
+			fire(ab)
+		}
 	}
 }

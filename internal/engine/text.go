@@ -74,6 +74,7 @@ func RenderCardText(def *CardDefinition) string {
 	if s := staticText(def.Static); s != "" {
 		rules = append(rules, s)
 	}
+	rules = append(rules, grantedText(def.Static)...)
 	for _, ab := range def.Abilities {
 		rules = append(rules, renderAbilityLine(def, ab))
 	}
@@ -124,6 +125,18 @@ func staticText(m StaticModifier) string {
 		return ""
 	}
 	return "This creature gains " + strings.Join(parts, " and ") + "."
+}
+
+// grantedText renders the triggered abilities an Upgrade grants its host, one
+// line each, e.g. `This creature gains, "Reap: Steal 1 Æmber."`. Self-references
+// resolve to "this creature" since the host is unknown when the Upgrade prints.
+func grantedText(m StaticModifier) []string {
+	lines := make([]string, 0, len(m.Granted))
+	for _, ab := range m.Granted {
+		body := strings.ReplaceAll(RenderAbility(ab), SelfName, "this creature")
+		lines = append(lines, `This creature gains, "`+body+`"`)
+	}
+	return lines
 }
 
 // keywordText renders a card's keywords as a single leading line, e.g.

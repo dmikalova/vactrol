@@ -105,6 +105,9 @@ const (
 	// TriggerBeforeFight fires when a creature is used to fight, before any
 	// combat damage is dealt.
 	TriggerBeforeFight
+	// TriggerAfterDestroyedFighting fires on a creature that survives a fight in
+	// which the other combatant was destroyed; the destroyed creature is `it`.
+	TriggerAfterDestroyedFighting
 )
 
 // prefix returns the printed text prefix for a trigger and whether the effect
@@ -128,6 +131,8 @@ func (t Trigger) prefix() (text string, capitalizeEffect bool) {
 		return "After you forge a key, ", false
 	case TriggerAfterCreatureEnters:
 		return "After a creature enters play, ", false
+	case TriggerAfterDestroyedFighting:
+		return "After a creature is destroyed fighting " + SelfName + ", ", false
 	default:
 		return "", true
 	}

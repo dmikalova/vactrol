@@ -34,6 +34,20 @@ func TestAllIsAValidDatabase(t *testing.T) {
 	}
 }
 
+// TestEveryCreatureAndArtifactHasTrait enforces the card-database policy that
+// every creature and artifact carries at least one trait (e.g. Giant, Beast,
+// Weapon). Actions and upgrades are exempt.
+func TestEveryCreatureAndArtifactHasTrait(t *testing.T) {
+	for _, c := range All() {
+		if c.Type != engine.Creature && c.Type != engine.Artifact {
+			continue
+		}
+		if len(c.Traits) == 0 {
+			t.Errorf("%s (%s) has no trait; every creature and artifact needs at least one", c.Name, c.Type)
+		}
+	}
+}
+
 // TestAllIsSortedDeterministically verifies the database comes back in a stable
 // order (house, then name), independent of package initialization order.
 func TestAllIsSortedDeterministically(t *testing.T) {

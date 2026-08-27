@@ -43,6 +43,10 @@ type StaticModifier struct {
 	ArmorBonus     int
 	AssaultBonus   int
 	HazardousBonus int
+
+	// Granted are triggered abilities the Upgrade grants its host creature. The
+	// host fires them as if they were printed on it (see Game.triggerAbilities).
+	Granted []Ability
 }
 
 // Ability pairs a trigger with the effect that resolves when it fires.

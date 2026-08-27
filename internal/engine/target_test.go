@@ -45,6 +45,36 @@ func TestTargetSelect(t *testing.T) {
 	if ids := (Target{Kind: TargetChosenCreature}).Select(empty); ids != nil {
 		t.Errorf("chosen-creature (no candidates) = %v, want nil", ids)
 	}
+
+	// TargetChosenEnemyCreature only offers enemy creatures.
+	g.SetChooser(0, nil) // back to the default FirstChooser
+	if ids := (Target{Kind: TargetChosenEnemyCreature}).Select(ctx); len(ids) != 1 || ids[0] != enemy {
+		t.Errorf("chosen-enemy = %v, want [%d]", ids, enemy)
+	}
+	g.SetChooser(0, orderRejectChooser{})
+	if ids := (Target{Kind: TargetChosenEnemyCreature}).Select(ctx); ids != nil {
+		t.Errorf("chosen-enemy (reject) = %v, want nil", ids)
+	}
+	g.SetChooser(0, nil)
+
+	// Damaged filter keeps only creatures with damage on them.
+	g.State.Cards[src].Damage = 1
+	if ids := (Target{Kind: TargetEachCreature}).Damaged().Select(ctx); len(ids) != 1 || ids[0] != src {
+		t.Errorf("damaged filter = %v, want [%d]", ids, src)
+	}
+	g.State.Cards[src].Damage = 0
+
+	// OnFlank keeps only the leftmost/rightmost creatures of a battleline.
+	mid := g.AddToBattleline(testCreature("mid", 1), 0)
+	right := g.AddToBattleline(testCreature("right", 1), 0)
+	// Player 0's battleline is now [src, mid, right]; only src and right are flanks.
+	if ids := (Target{Kind: TargetEachFriendlyCreature}).OnFlank().Select(ctx); len(ids) != 2 || ids[0] != src || ids[1] != right {
+		t.Errorf("flank filter = %v, want [%d %d]", ids, src, right)
+	}
+	// NotOnFlank keeps only the interior creatures (here, just mid).
+	if ids := (Target{Kind: TargetEachFriendlyCreature}).NotOnFlank().Select(ctx); len(ids) != 1 || ids[0] != mid {
+		t.Errorf("not-on-flank filter = %v, want [%d]", ids, mid)
+	}
 }
 
 func TestTargetText(t *testing.T) {
@@ -61,5 +91,20 @@ func TestTargetText(t *testing.T) {
 		if got := (Target{Kind: kind}).Text(); got != want {
 			t.Errorf("Text(%d) = %q, want %q", kind, got, want)
 		}
+	}
+	if got := (Target{Kind: TargetChosenEnemyCreature}).Text(); got != "an enemy creature" {
+		t.Errorf("chosen-enemy text = %q", got)
+	}
+	if got := (Target{Kind: TargetChosenCreature}).Damaged().Text(); got != "a damaged creature" {
+		t.Errorf("damaged text = %q", got)
+	}
+	if got := (Target{Kind: TargetChosenCreature}).OnFlank().Text(); got != "a flank creature" {
+		t.Errorf("flank text = %q", got)
+	}
+	if got := (Target{Kind: TargetChosenCreature}).NotOnFlank().Text(); got != "a creature that is not on a flank" {
+		t.Errorf("not-on-flank text = %q", got)
+	}
+	if got := (Target{Kind: TargetEachEnemyCreature}).NotOnFlank().Text(); got != "each enemy creature that is not on a flank" {
+		t.Errorf("not-on-flank each text = %q", got)
 	}
 }
