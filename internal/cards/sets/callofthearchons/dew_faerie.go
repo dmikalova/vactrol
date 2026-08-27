@@ -4,7 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Dew Faerie
 //
-//	Untamed / Creature / Common / 2 Power / Faerie / Elusive
+//	House:  Untamed
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  2
+//	Armor:  0
+//	Traits: Faerie
+//
+//	Elusive.
 //	Reap: Gain 1 Æmber.
 var DewFaerie = card.New(
 	"Dew Faerie",

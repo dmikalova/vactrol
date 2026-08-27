@@ -1,0 +1,32 @@
+package engine
+
+import "testing"
+
+func TestStunEffects(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	src := g.AddToBattleline(testCreature("src", 3), 0)
+	friend := g.AddToBattleline(testCreature("friend", 3), 0)
+	foe := g.AddToBattleline(testCreature("foe", 3), 1)
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	stun := Stun{Target: Target{Kind: TargetEachFriendlyCreature}}
+	if stun.Text() != "stun each friendly creature" {
+		t.Errorf("stun text = %q", stun.Text())
+	}
+	stun.Resolve(ctx)
+	if !g.State.Cards[src].Stunned || !g.State.Cards[friend].Stunned {
+		t.Error("stun should stun each friendly creature")
+	}
+	if g.State.Cards[foe].Stunned {
+		t.Error("stun of friendly creatures should not touch the enemy")
+	}
+
+	unstun := Unstun{Target: Target{Kind: TargetEachFriendlyCreature}}
+	if unstun.Text() != "unstun each friendly creature" {
+		t.Errorf("unstun text = %q", unstun.Text())
+	}
+	unstun.Resolve(ctx)
+	if g.State.Cards[src].Stunned || g.State.Cards[friend].Stunned {
+		t.Error("unstun should clear the stun on each friendly creature")
+	}
+}

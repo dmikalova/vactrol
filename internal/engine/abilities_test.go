@@ -294,6 +294,57 @@ func TestSkirmishAndArmorAndPoison(t *testing.T) {
 	}
 }
 
+// attachUpgrade registers an upgrade and attaches it to a host creature.
+func attachUpgrade(g *Game, host LocalID, def CardDefinition) {
+	up := g.Register(def, g.owner(host))
+	core := &g.State.Cards[host]
+	core.Upgrades[core.UpgradeCount] = up
+	core.UpgradeCount++
+}
+
+func TestAssaultAndHazardous(t *testing.T) {
+	// Assault: the attacker deals its Assault to the defender before fight damage.
+	g := NewGame("A", "B", 1)
+	att := g.AddToBattleline(NewCard("assailant", Brobnar, Creature, Common, WithPower(3), WithAssault(2)), 0)
+	def := g.AddToBattleline(testCreature("beefy", 10), 1)
+	g.fight(att, def)
+	if g.Damage(def) != 5 { // 2 assault + 3 fight
+		t.Errorf("assault: defender damage = %d, want 5 (2 assault + 3 fight)", g.Damage(def))
+	}
+
+	// Hazardous can destroy the attacker before any combat damage is exchanged.
+	g2 := NewGame("A", "B", 1)
+	frail := g2.AddToBattleline(testCreature("frail", 4), 0)
+	thorns := g2.AddToBattleline(NewCard("thorns", Untamed, Creature, Common, WithPower(6), WithHazardous(5)), 1)
+	g2.fight(frail, thorns)
+	if g2.inPlay(frail) {
+		t.Error("hazardous should destroy the frail attacker before combat")
+	}
+	if g2.Damage(thorns) != 0 {
+		t.Errorf("no combat should occur; thorns damage = %d, want 0", g2.Damage(thorns))
+	}
+
+	// Assault granted by an upgrade stacks (the accessor sums upgrade bonuses).
+	g3 := NewGame("A", "B", 1)
+	host := g3.AddToBattleline(testCreature("host", 3), 0)
+	wall := g3.AddToBattleline(testCreature("wall", 10), 1)
+	attachUpgrade(g3, host, NewCard("bearway", Untamed, Upgrade, Common, WithStatic(StaticModifier{AssaultBonus: 2})))
+	g3.fight(host, wall)
+	if g3.Damage(wall) != 5 {
+		t.Errorf("upgraded assault: wall damage = %d, want 5", g3.Damage(wall))
+	}
+
+	// Hazardous granted by an upgrade stacks too.
+	g4 := NewGame("A", "B", 1)
+	weak := g4.AddToBattleline(testCreature("weak", 1), 0)
+	guard := g4.AddToBattleline(testCreature("guard", 6), 1)
+	attachUpgrade(g4, guard, NewCard("flames", Dis, Upgrade, Common, WithStatic(StaticModifier{HazardousBonus: 2})))
+	g4.fight(weak, guard)
+	if g4.inPlay(weak) {
+		t.Error("upgraded hazardous should destroy the weak attacker")
+	}
+}
+
 func TestDestroyMovesUpgradesToDiscard(t *testing.T) {
 	g := started(t)
 	host := g.AddToBattleline(testCreature("host", 1), 0)

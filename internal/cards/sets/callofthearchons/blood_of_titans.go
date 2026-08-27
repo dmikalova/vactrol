@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Blood of Titans
 //
-//	Brobnar / Upgrade / Uncommon / 1 Æmber
+//	House:  Brobnar
+//	Type:   Upgrade
+//	Rarity: Uncommon
+//	Æmber:  1
+//
 //	This creature gains +5 power.
 var BloodOfTitans = card.New(
 	"Blood of Titans",

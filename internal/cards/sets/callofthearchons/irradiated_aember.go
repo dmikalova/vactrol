@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Irradiated Aember
 //
-//	Mars / Action / Rare / 1 Æmber
+//	House:  Mars
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
 //	Play: If your opponent has 6 Æmber or more, deal 3 damage to each enemy creature.
 var IrradiatedAember = card.New(
 	"Irradiated Aember",

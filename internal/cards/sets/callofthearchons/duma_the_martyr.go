@@ -4,8 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Duma the Martyr
 //
-//	Sanctum / Creature / Rare / 3 Power / Human
-//	Destroyed: Fully heal each other friendly creature and draw 2 cards.
+//	House:  Sanctum
+//	Type:   Creature
+//	Rarity: Rare
+//	Power:  3
+//	Armor:  0
+//	Traits: Human
+//
+//	Destroyed: Fully heal each other friendly creature, and draw 2 cards.
 var DumaTheMartyr = card.New(
 	"Duma the Martyr",
 	card.House.Sanctum,

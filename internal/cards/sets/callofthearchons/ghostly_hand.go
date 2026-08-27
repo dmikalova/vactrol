@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Ghostly Hand
 //
-//	Shadows / Action / Common / 2 Æmber
+//	House:  Shadows
+//	Type:   Action
+//	Rarity: Common
+//	Æmber:  2
+//
 //	Play: If your opponent has exactly 1 Æmber, steal 1 Æmber.
 var GhostlyHand = card.New(
 	"Ghostly Hand",

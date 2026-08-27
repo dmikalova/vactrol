@@ -4,7 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Batdrone
 //
-//	Logos / Creature / Common / 2 Power / Robot / Skirmish
+//	House:  Logos
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  2
+//	Armor:  0
+//	Traits: Robot
+//
+//	Skirmish.
 //	Fight: Steal 1 Æmber.
 var Batdrone = card.New(
 	"Batdrone",

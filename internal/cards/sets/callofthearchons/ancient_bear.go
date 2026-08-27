@@ -4,7 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Ancient Bear
 //
-//	Untamed / Creature / Common / 5 Power / Skirmish
+//	House:  Untamed
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Armor:  0
+//	Traits: Beast
+//
+//	Assault 2.
 var AncientBear = card.New(
 	"Ancient Bear",
 	card.House.Untamed,
@@ -12,5 +19,6 @@ var AncientBear = card.New(
 	card.Rarity.Common,
 	card.Provenance(card.CotA, 345),
 	card.WithPower(5),
-	card.WithKeywords(card.Keyword.Skirmish),
+	card.WithTraits("Beast"),
+	card.WithAssault(2),
 )

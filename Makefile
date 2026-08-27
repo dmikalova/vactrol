@@ -1,6 +1,6 @@
 # Vactrol developer tasks. Run `make help` to list targets.
 
-.PHONY: help run build test cover vet fmt tidy
+.PHONY: help run build test cover vet fmt tidy generate-comments
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -27,3 +27,6 @@ fmt: ## Format all Go files
 
 tidy: ## Tidy module dependencies
 	go mod tidy
+
+generate-comments: ## Rewrite each card's doc comment from its definition
+	go run ./cmd/gencomments

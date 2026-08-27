@@ -28,13 +28,18 @@ helper (stdlib `httptest`/`iotest` convention), not a set, so it sits outside
 
 ## Style
 
-Each card is a `var` whose doc comment is exactly three kinds of line, and whose
-`card.New(...)` call puts **every parameter on its own line**:
+The doc comment above each card is **generated, not hand-written** — run
+`make generate-comments` (it rewrites every card's comment from its definition,
+the same details the TUI card box shows via `engine.RenderCardText`). Write the
+`card.New(...)` call and let the generator fill in the comment:
 
 ```go
 // Ammonia Clouds
 //
-//	Mars / Action / Common
+//	House:  Mars
+//	Type:   Action
+//	Rarity: Common
+//
 //	Play: Deal 3 damage to each creature.
 var AmmoniaClouds = card.New(
 	"Ammonia Clouds",
@@ -49,17 +54,19 @@ var AmmoniaClouds = card.New(
 )
 ```
 
-Doc comment (tab-indented so godoc renders the stat/text lines as preformatted;
-`gofmt` requires the blank `//` line after the title before that block):
+The generated comment (tab-indented so godoc renders the block preformatted;
+`gofmt` requires the blank `//` line after the title) is:
 
 1. `// <Card Name>` — the card's display name.
-2. `//\t<House> / <Type> / <Rarity>` followed by any extra stats in this order:
-   `Power`, `Armor`, `Æmber`, traits, keywords
-   (e.g. `Brobnar / Creature / Rare / 5 Power / 0 Armor / Giant`).
-3. `//\t<rules text>` — the printed card text. Omit this line for vanilla cards
-   that have no rules text.
+2. A labeled, colon-aligned block: `House`, `Type`, `Rarity`, then `Power` and
+   `Armor` for creatures, `Æmber` when the card has an Æmber bonus, and `Traits`
+   when it has traits.
+3. After a blank `//`, the printed rules text (keywords, upgrade modifier, and
+   ability lines) — omitted entirely for vanilla cards with no rules text.
 
-`card.New(...)`:
+So authoring a card is just adding the `card.New(...)` file and running
+`make generate-comments`; a placeholder `// <Name>` line above the var is enough
+to seed it. `card.New(...)`:
 
 - The four positional arguments — name, `card.House.X`, `card.Type.X`,
   `card.Rarity.X` — each on their own line.

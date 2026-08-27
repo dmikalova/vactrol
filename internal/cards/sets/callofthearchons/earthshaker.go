@@ -4,7 +4,13 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Earthshaker
 //
-//	Brobnar / Creature / Uncommon / 7 Power / Giant
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Uncommon
+//	Power:  7
+//	Armor:  0
+//	Traits: Giant
+//
 //	Play: Destroy each creature with power 3 or lower.
 var Earthshaker = card.New(
 	"Earthshaker",

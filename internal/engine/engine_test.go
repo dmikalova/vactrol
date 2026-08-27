@@ -304,3 +304,41 @@ func TestDrawReshufflesEmptyDeck(t *testing.T) {
 		t.Errorf("drawTo drained deck: hand = %d, want 2", g.State.Hand[0].Count)
 	}
 }
+
+func TestOrderByChoice(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	ids := []LocalID{10, 20, 30}
+	eq := func(a, b []LocalID) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		for i := range a {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Nothing to order for 0 or 1 ids.
+	if got := g.OrderByChoice(0, "p", nil); len(got) != 0 {
+		t.Errorf("nil order = %v", got)
+	}
+	if got := g.OrderByChoice(0, "p", []LocalID{7}); !eq(got, []LocalID{7}) {
+		t.Errorf("single order = %v", got)
+	}
+	// FirstChooser (default) keeps the original order.
+	if got := g.OrderByChoice(0, "p", ids); !eq(got, []LocalID{10, 20, 30}) {
+		t.Errorf("first-chooser order = %v", got)
+	}
+	// Picking the last each time reverses the order.
+	g.SetChooser(0, orderLastChooser{})
+	if got := g.OrderByChoice(0, "p", ids); !eq(got, []LocalID{30, 20, 10}) {
+		t.Errorf("last-chooser order = %v", got)
+	}
+	// A rejected pick falls back to the given order.
+	g.SetChooser(0, orderRejectChooser{})
+	if got := g.OrderByChoice(0, "p", ids); !eq(got, []LocalID{10, 20, 30}) {
+		t.Errorf("reject order = %v", got)
+	}
+}

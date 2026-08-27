@@ -4,9 +4,15 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Dextre
 //
-//	Logos / Creature / Common / 3 Power / Human / Scientist
+//	House:  Logos
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  3
+//	Armor:  0
+//	Traits: Human • Scientist
+//
 //	Play: Dextre captures 1 Æmber.
-//	Destroyed: Put Dextre on top of its owner's deck.
+//	Destroyed: Put this creature on top of its owner's deck.
 var Dextre = card.New(
 	"Dextre",
 	card.House.Logos,

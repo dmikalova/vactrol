@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Fertility Chant
 //
-//	Untamed / Action / Rare / 4 Æmber
+//	House:  Untamed
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  4
+//
 //	Play: Your opponent gains 2 Æmber.
 var FertilityChant = card.New(
 	"Fertility Chant",

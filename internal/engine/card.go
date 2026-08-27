@@ -19,6 +19,12 @@ type CardDefinition struct {
 
 	Keywords []Keyword
 
+	// Assault deals this much damage to the creature this one attacks, before
+	// fight damage; Hazardous deals this much to a creature that attacks this one.
+	// Zero means the creature does not have that numeric keyword.
+	Assault   int
+	Hazardous int
+
 	// AemberBonus is the number of Æmber "pips" printed on the card; the
 	// controller gains this much Æmber when the card is played.
 	AemberBonus int
@@ -33,8 +39,10 @@ type CardDefinition struct {
 // StaticModifier is a continuous change applied by an Upgrade to the creature it
 // is attached to.
 type StaticModifier struct {
-	PowerBonus int
-	ArmorBonus int
+	PowerBonus     int
+	ArmorBonus     int
+	AssaultBonus   int
+	HazardousBonus int
 }
 
 // Ability pairs a trigger with the effect that resolves when it fires.
@@ -112,6 +120,14 @@ func WithTraits(traits ...Trait) CardOption {
 func WithKeywords(keywords ...Keyword) CardOption {
 	return func(c *CardDefinition) { c.Keywords = append(c.Keywords, keywords...) }
 }
+
+// WithAssault gives a creature Assault N: it deals N damage to the creature it
+// attacks, before fight damage.
+func WithAssault(n int) CardOption { return func(c *CardDefinition) { c.Assault = n } }
+
+// WithHazardous gives a creature Hazardous N: a creature that attacks it is dealt
+// N damage before fight damage.
+func WithHazardous(n int) CardOption { return func(c *CardDefinition) { c.Hazardous = n } }
 
 // WithAemberBonus sets the number of Æmber pips on the card.
 func WithAemberBonus(n int) CardOption { return func(c *CardDefinition) { c.AemberBonus = n } }

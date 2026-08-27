@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Ritual of Balance
 //
-//	Untamed / Artifact / Uncommon / Power
+//	House:  Untamed
+//	Type:   Artifact
+//	Rarity: Uncommon
+//	Traits: Power
+//
 //	Action: If your opponent has 6 Æmber or more, steal 1 Æmber.
 var RitualOfBalance = card.New(
 	"Ritual of Balance",

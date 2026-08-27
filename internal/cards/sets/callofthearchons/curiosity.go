@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Curiosity
 //
-//	Untamed / Action / Rare / 1 Æmber
+//	House:  Untamed
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
 //	Play: Destroy each Scientist trait creature.
 var Curiosity = card.New(
 	"Curiosity",

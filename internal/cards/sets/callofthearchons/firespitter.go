@@ -4,8 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Firespitter
 //
-//	Brobnar / Creature / Common / 5 Power / 1 Armor / Giant
-//	Before Fight: Deal 1 Damage to each enemy creature.
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Armor:  1
+//	Traits: Giant
+//
+//	Before Fight: Deal 1 damage to each enemy creature.
 var Firespitter = card.New(
 	"Firespitter",
 	card.House.Brobnar,

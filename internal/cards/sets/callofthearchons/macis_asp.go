@@ -4,9 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Macis Asp
 //
-//	Shadows / Creature / Uncommon / 3 Power / Beast / Skirmish / Poison
-//	Skirmish.
-//	Poison.
+//	House:  Shadows
+//	Type:   Creature
+//	Rarity: Uncommon
+//	Power:  3
+//	Armor:  0
+//	Traits: Beast
+//
+//	Skirmish. Poison.
 var MacisAsp = card.New(
 	"Macis Asp",
 	card.House.Shadows,

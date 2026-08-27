@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Clear Mind
 //
-//	Sanctum / Action / Rare / 1 Æmber
+//	House:  Sanctum
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
 //	Play: Unstun each friendly creature.
 var ClearMind = card.New(
 	"Clear Mind",

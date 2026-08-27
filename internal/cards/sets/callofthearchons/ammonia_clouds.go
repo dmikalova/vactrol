@@ -4,7 +4,10 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Ammonia Clouds
 //
-//	Mars / Action / Common
+//	House:  Mars
+//	Type:   Action
+//	Rarity: Common
+//
 //	Play: Deal 3 damage to each creature.
 var AmmoniaClouds = card.New(
 	"Ammonia Clouds",

@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Hallowed Blaster
 //
-//	Sanctum / Artifact / Common / Weapon
+//	House:  Sanctum
+//	Type:   Artifact
+//	Rarity: Common
+//	Traits: Weapon
+//
 //	Action: Heal 3 damage from a creature.
 var HallowedBlaster = card.New(
 	"Hallowed Blaster",

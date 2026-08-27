@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Ganger Chieftain
 //
-//	Brobnar / Creature / Common / 5 Power
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Armor:  0
 var GangerChieftain = card.New(
 	"Ganger Chieftain",
 	card.House.Brobnar,

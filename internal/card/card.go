@@ -81,6 +81,8 @@ var (
 	WithArmor       = func(a int) Option { return gameplay(engine.WithArmor(a)) }
 	WithTraits      = func(t ...Trait) Option { return gameplay(engine.WithTraits(t...)) }
 	WithKeywords    = func(k ...engine.Keyword) Option { return gameplay(engine.WithKeywords(k...)) }
+	WithAssault     = func(n int) Option { return gameplay(engine.WithAssault(n)) }
+	WithHazardous   = func(n int) Option { return gameplay(engine.WithHazardous(n)) }
 	WithAemberBonus = func(n int) Option { return gameplay(engine.WithAemberBonus(n)) }
 	WithStatic      = func(m StaticModifier) Option { return gameplay(engine.WithStatic(m)) }
 	WithAbility     = func(t engine.Trigger, e Effect) Option { return gameplay(engine.WithAbility(t, e)) }

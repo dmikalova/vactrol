@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Barehanded
 //
-//	Brobnar / Action / Rare / 1 Æmber
+//	House:  Brobnar
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
 //	Play: Put each artifact on top of its owner's deck.
 var Barehanded = card.New(
 	"Barehanded",

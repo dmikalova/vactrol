@@ -4,7 +4,12 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Dust Imp
 //
-//	Untamed / Creature / Common / 1 Power
+//	House:  Untamed
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  1
+//	Armor:  0
+//
 //	Reap: Gain 1 Æmber.
 var DustImp = card.New(
 	"Dust Imp",

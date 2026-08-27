@@ -4,7 +4,13 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Doc Bookton
 //
-//	Logos / Creature / Common / 5 Power / Human / Scientist
+//	House:  Logos
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Armor:  0
+//	Traits: Human • Scientist
+//
 //	Reap: Draw a card.
 var DocBookton = card.New(
 	"Doc Bookton",

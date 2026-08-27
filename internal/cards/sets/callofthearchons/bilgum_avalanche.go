@@ -4,8 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Bilgum Avalanche
 //
-//	Brobnar / Creature / Rare / 5 Power / Giant
-//	After you forge a key, deal 2 Damage to each enemy creature.
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Rare
+//	Power:  5
+//	Armor:  0
+//	Traits: Giant
+//
+//	After you forge a key, deal 2 damage to each enemy creature.
 var BilgumAvalanche = card.New(
 	"Bilgum Avalanche",
 	card.House.Brobnar,

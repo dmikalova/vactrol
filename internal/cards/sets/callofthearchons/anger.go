@@ -4,7 +4,11 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Anger
 //
-//	Brobnar / Action / Common / 1 Æmber
+//	House:  Brobnar
+//	Type:   Action
+//	Rarity: Common
+//	Æmber:  1
+//
 //	Play: Ready and fight with a friendly creature.
 var Anger = card.New(
 	"Anger",

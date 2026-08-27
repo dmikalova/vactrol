@@ -54,10 +54,33 @@ func TestGeneratedCardText(t *testing.T) {
 		{exAutocannon(), "House:  Brobnar\nType:   Artifact\nRarity: Rare\nÆmber:  1\nTraits: Weapon\n\nAfter a creature enters play, deal 1 damage to it."},
 		{NewCard("Asp", Shadows, Creature, Uncommon, WithPower(3), WithKeywords(Skirmish, Poison)), "House:  Shadows\nType:   Creature\nRarity: Uncommon\nPower:  3\nArmor:  0\n\nSkirmish. Poison."},
 		{NewCard("Tabris", Sanctum, Creature, Uncommon, WithPower(6), WithAbility(TriggerAfterFight, CaptureAember{Amount: 1})), "House:  Sanctum\nType:   Creature\nRarity: Uncommon\nPower:  6\nArmor:  0\n\nFight: Tabris captures 1 Æmber."},
+		{NewCard("Bear", Untamed, Creature, Common, WithPower(5), WithTraits("Beast"), WithAssault(2)), "House:  Untamed\nType:   Creature\nRarity: Common\nPower:  5\nArmor:  0\nTraits: Beast\n\nAssault 2."},
+		{NewCard("Grub", Untamed, Creature, Rare, WithPower(2), WithHazardous(5)), "House:  Untamed\nType:   Creature\nRarity: Rare\nPower:  2\nArmor:  0\n\nHazardous 5."},
 	}
 	for _, tc := range cases {
 		if got := RenderCardText(&tc.def); got != tc.want {
 			t.Errorf("%s text mismatch:\n got:\n%s\nwant:\n%s", tc.def.Name, got, tc.want)
+		}
+	}
+}
+
+func TestCardDocComment(t *testing.T) {
+	cases := []struct {
+		def  CardDefinition
+		want string
+	}{
+		{
+			exGiant(),
+			"// Brobnar Giant\n//\n//\tHouse:  Brobnar\n//\tType:   Creature\n//\tRarity: Rare\n//\tPower:  5\n//\tArmor:  0\n//\tTraits: Giant\n//\n//\tAfter you forge a key, deal 2 damage to each enemy creature.",
+		},
+		{
+			NewCard("Asp", Shadows, Creature, Uncommon, WithPower(3), WithKeywords(Skirmish, Poison)),
+			"// Asp\n//\n//\tHouse:  Shadows\n//\tType:   Creature\n//\tRarity: Uncommon\n//\tPower:  3\n//\tArmor:  0\n//\n//\tSkirmish. Poison.",
+		},
+	}
+	for _, tc := range cases {
+		if got := CardDocComment(&tc.def); got != tc.want {
+			t.Errorf("%s doc comment mismatch:\n got:\n%s\nwant:\n%s", tc.def.Name, got, tc.want)
 		}
 	}
 }
@@ -78,5 +101,11 @@ func TestStaticText(t *testing.T) {
 	got := staticText(StaticModifier{PowerBonus: 5, ArmorBonus: 2})
 	if got != "This creature gains +5 power and +2 armor." {
 		t.Errorf("staticText = %q", got)
+	}
+	if got := staticText(StaticModifier{AssaultBonus: 2}); got != "This creature gains +2 assault." {
+		t.Errorf("assault staticText = %q", got)
+	}
+	if got := staticText(StaticModifier{PowerBonus: 2, HazardousBonus: 2}); got != "This creature gains +2 power and +2 hazardous." {
+		t.Errorf("hazardous staticText = %q", got)
 	}
 }

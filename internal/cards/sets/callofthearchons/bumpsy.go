@@ -4,7 +4,13 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Bumpsy
 //
-//	Brobnar / Creature / Common / 5 Power / Giant
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Armor:  0
+//	Traits: Giant
+//
 //	Play: Your opponent loses 1 Æmber.
 var Bumpsy = card.New(
 	"Bumpsy",

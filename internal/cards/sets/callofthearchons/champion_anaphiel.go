@@ -4,7 +4,13 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Champion Anaphiel
 //
-//	Sanctum / Creature / Common / 6 Power / 1 Armor / Knight / Spirit / Taunt
+//	House:  Sanctum
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  6
+//	Armor:  1
+//	Traits: Knight • Spirit
+//
 //	Taunt.
 var ChampionAnaphiel = card.New(
 	"Champion Anaphiel",

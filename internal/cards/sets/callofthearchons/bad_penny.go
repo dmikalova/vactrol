@@ -4,8 +4,14 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Bad Penny
 //
-//	Shadows / Creature / Common / 1 Power / Human / Thief
-//	Destroyed: Put Bad Penny into its owner's hand.
+//	House:  Shadows
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  1
+//	Armor:  0
+//	Traits: Human • Thief
+//
+//	Destroyed: Put this creature into its owner's hand.
 var BadPenny = card.New(
 	"Bad Penny",
 	card.House.Shadows,

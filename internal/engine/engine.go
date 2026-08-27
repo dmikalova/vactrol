@@ -358,9 +358,27 @@ func (g *Game) fight(attacker, defender LocalID) {
 	// "Before Fight" ability already sees the attacker exhausted.
 	g.State.Cards[attacker].Exhausted = true
 	g.triggerAbilities(attacker, TriggerBeforeFight, 0, false)
-	// A "Before Fight" effect can destroy the defender before combat; if so, the
-	// attack still exhausts the attacker but no combat damage is exchanged.
+
+	// Assault and Hazardous deal their damage before fight damage: the attacker's
+	// Assault hits the defender, the defender's Hazardous hits the attacker.
+	// Either can destroy a fighter before combat. Skipped if a "Before Fight"
+	// effect already removed the defender.
 	if g.inPlay(defender) {
+		var pre []DamageTarget
+		if a := g.assault(attacker); a > 0 {
+			pre = append(pre, DamageTarget{ID: defender, Amount: a})
+		}
+		if h := g.hazardous(defender); h > 0 {
+			pre = append(pre, DamageTarget{ID: attacker, Amount: h})
+		}
+		if len(pre) > 0 {
+			g.dealDamage(g.owner(attacker), pre...)
+		}
+	}
+
+	// Combat damage is exchanged only while both fighters are still in play (a
+	// "Before Fight" effect, Assault, or Hazardous can remove one first).
+	if g.inPlay(attacker) && g.inPlay(defender) {
 		ap, dp := g.Power(attacker), g.Power(defender)
 		g.logf("%s (%d power) fights %s (%d power)", g.Name(attacker), ap, g.Name(defender), dp)
 		// Both fighters take their damage simultaneously, then destruction is

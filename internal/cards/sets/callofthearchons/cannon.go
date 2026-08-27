@@ -4,8 +4,12 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Cannon
 //
-//	Brobnar / Artifact / Uncommon / Weapon
-//	Action: Deal 2 Damage to a creature.
+//	House:  Brobnar
+//	Type:   Artifact
+//	Rarity: Uncommon
+//	Traits: Weapon
+//
+//	Action: Deal 2 damage to a creature.
 var Cannon = card.New(
 	"Cannon",
 	card.House.Brobnar,

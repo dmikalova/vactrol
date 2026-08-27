@@ -68,7 +68,7 @@ func RenderCardText(def *CardDefinition) string {
 	// Rules text (keywords, upgrade modifier, abilities) follows the labeled
 	// header, separated by a blank line.
 	var rules []string
-	if s := keywordText(def.Keywords); s != "" {
+	if s := keywordText(def); s != "" {
 		rules = append(rules, s)
 	}
 	if s := staticText(def.Static); s != "" {
@@ -85,6 +85,25 @@ func RenderCardText(def *CardDefinition) string {
 	return strings.Join(lines, "\n")
 }
 
+// CardDocComment renders a card's details as a Go doc comment block, the form
+// `make generate-comments` writes above each card's declaration. It is the card
+// name, a blank separator, then RenderCardText's lines, each turned into a
+// comment line: the title as "// <Name>", blanks as "//", and detail lines as
+// tab-indented "//\t..." so godoc renders the labeled block preformatted. The
+// result has no trailing newline.
+func CardDocComment(def *CardDefinition) string {
+	var b strings.Builder
+	b.WriteString("// " + def.Name + "\n//\n")
+	for _, line := range strings.Split(RenderCardText(def), "\n") {
+		if line == "" {
+			b.WriteString("//\n")
+		} else {
+			b.WriteString("//\t" + line + "\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 // staticText renders an Upgrade's continuous modifier, e.g.
 // "This creature gets +5 power."
 func staticText(m StaticModifier) string {
@@ -95,6 +114,12 @@ func staticText(m StaticModifier) string {
 	if m.ArmorBonus != 0 {
 		parts = append(parts, fmt.Sprintf("%+d armor", m.ArmorBonus))
 	}
+	if m.AssaultBonus != 0 {
+		parts = append(parts, fmt.Sprintf("%+d assault", m.AssaultBonus))
+	}
+	if m.HazardousBonus != 0 {
+		parts = append(parts, fmt.Sprintf("%+d hazardous", m.HazardousBonus))
+	}
 	if len(parts) == 0 {
 		return ""
 	}
@@ -102,14 +127,20 @@ func staticText(m StaticModifier) string {
 }
 
 // keywordText renders a card's keywords as a single leading line, e.g.
-// "Skirmish. Poison.". Returns "" when the card has no keywords.
-func keywordText(kws []Keyword) string {
-	if len(kws) == 0 {
-		return ""
+// "Skirmish. Poison." or "Assault 2.". Returns "" when the card has none.
+func keywordText(def *CardDefinition) string {
+	var parts []string
+	for _, k := range def.Keywords {
+		parts = append(parts, string(k)+".")
 	}
-	parts := make([]string, len(kws))
-	for i, k := range kws {
-		parts[i] = string(k) + "."
+	if def.Assault > 0 {
+		parts = append(parts, fmt.Sprintf("Assault %d.", def.Assault))
+	}
+	if def.Hazardous > 0 {
+		parts = append(parts, fmt.Sprintf("Hazardous %d.", def.Hazardous))
+	}
+	if len(parts) == 0 {
+		return ""
 	}
 	return strings.Join(parts, " ")
 }

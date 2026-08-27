@@ -4,7 +4,12 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Autocannon
 //
-//	Brobnar / Artifact / Rare / 1 Æmber / Weapon
+//	House:  Brobnar
+//	Type:   Artifact
+//	Rarity: Rare
+//	Æmber:  1
+//	Traits: Weapon
+//
 //	After a creature enters play, deal 1 damage to it.
 var Autocannon = card.New(
 	"Autocannon",

@@ -188,6 +188,26 @@ func (g *Game) armor(id LocalID) int {
 	return a
 }
 
+// assault returns a creature's Assault value including attached upgrades.
+func (g *Game) assault(id LocalID) int {
+	core := &g.State.Cards[id]
+	a := g.cat.def(id).Assault
+	for i := 0; i < int(core.UpgradeCount); i++ {
+		a += g.cat.def(core.Upgrades[i]).Static.AssaultBonus
+	}
+	return a
+}
+
+// hazardous returns a creature's Hazardous value including attached upgrades.
+func (g *Game) hazardous(id LocalID) int {
+	core := &g.State.Cards[id]
+	h := g.cat.def(id).Hazardous
+	for i := 0; i < int(core.UpgradeCount); i++ {
+		h += g.cat.def(core.Upgrades[i]).Static.HazardousBonus
+	}
+	return h
+}
+
 // Damage returns the damage currently on a creature.
 func (g *Game) Damage(id LocalID) int { return int(g.State.Cards[id].Damage) }
 

@@ -66,3 +66,15 @@ func handIdxByID(g *Game, player int, want LocalID) int {
 	}
 	return -1
 }
+
+// orderLastChooser always picks the last candidate, reversing an ordering.
+type orderLastChooser struct{}
+
+func (orderLastChooser) ChooseCreature(_ string, c []LocalID) (LocalID, bool) {
+	return c[len(c)-1], true
+}
+
+// orderRejectChooser refuses to pick, so ordering falls back to the given order.
+type orderRejectChooser struct{}
+
+func (orderRejectChooser) ChooseCreature(string, []LocalID) (LocalID, bool) { return 0, false }
