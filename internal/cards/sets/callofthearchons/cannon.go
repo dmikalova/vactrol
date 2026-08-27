@@ -1,0 +1,18 @@
+package callofthearchons
+
+import "github.com/dmikalova/vactrol/internal/card"
+
+// Cannon
+//
+//	Brobnar / Artifact / Uncommon / Weapon
+//	Action: Deal 2 Damage to a creature.
+var Cannon = card.New(
+	"Cannon",
+	card.House.Brobnar,
+	card.Type.Artifact,
+	card.Rarity.Uncommon,
+	card.Provenance(card.CotA, 21),
+	card.WithTraits("Weapon"),
+	card.WithAbility(
+		card.Trigger.Action, card.DealDamage{Amount: 2, Target: card.Target.Creature}),
+)

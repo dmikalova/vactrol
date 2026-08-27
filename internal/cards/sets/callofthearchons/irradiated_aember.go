@@ -1,0 +1,21 @@
+package callofthearchons
+
+import "github.com/dmikalova/vactrol/internal/card"
+
+// Irradiated Aember
+//
+//	Mars / Action / Rare / 1 Æmber
+//	Play: If your opponent has 6 Æmber or more, deal 3 damage to each enemy creature.
+var IrradiatedAember = card.New(
+	"Irradiated Aember",
+	card.House.Mars,
+	card.Type.Action,
+	card.Rarity.Rare,
+	card.Provenance(card.CotA, 165),
+	card.WithAemberBonus(1),
+	card.WithAbility(
+		card.Trigger.Play, card.Conditional{
+			Cond: card.OpponentAemberAtLeast{Amount: 6},
+			Then: card.DealDamage{Amount: 3, Target: card.Target.EachEnemyCreature},
+		}),
+)
