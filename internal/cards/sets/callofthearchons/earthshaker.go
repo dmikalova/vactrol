@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Uncommon
 //	Power:  7
-//	Armor:  0
 //	Traits: Giant
 //
 //	Play: Destroy each creature with power 3 or lower.

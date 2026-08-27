@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Common
 //	Power:  1
-//	Armor:  0
 //	Traits: Human • Thief
 //
 //	Destroyed: Put this creature into its owner's hand.

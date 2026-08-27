@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Rare
 //	Power:  2
-//	Armor:  0
 //	Traits: Beast • Insect
 //
 //	Hazardous 5.

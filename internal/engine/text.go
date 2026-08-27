@@ -35,10 +35,10 @@ func RenderCardText(def *CardDefinition) string {
 		{"Rarity", string(def.Rarity)},
 	}
 	if def.Type == Creature {
-		fields = append(fields,
-			field{"Power", fmt.Sprintf("%d", def.Power)},
-			field{"Armor", fmt.Sprintf("%d", def.Armor)},
-		)
+		fields = append(fields, field{"Power", fmt.Sprintf("%d", def.Power)})
+		if def.Armor > 0 {
+			fields = append(fields, field{"Armor", fmt.Sprintf("%d", def.Armor)})
+		}
 	}
 	if def.AemberBonus > 0 {
 		fields = append(fields, field{"Æmber", fmt.Sprintf("%d", def.AemberBonus)})

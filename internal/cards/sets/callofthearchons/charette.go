@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Common
 //	Power:  4
-//	Armor:  0
 //	Traits: Demon
 //
 //	Play: Charette captures 3 Æmber.

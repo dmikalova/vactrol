@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Common
 //	Power:  3
-//	Armor:  0
 //	Traits: Human • Scientist
 //
 //	Play: Dextre captures 1 Æmber.

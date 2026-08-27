@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Rare
 //	Power:  3
-//	Armor:  0
 //	Traits: Human
 //
 //	Destroyed: Fully heal each other friendly creature, and draw 2 cards.

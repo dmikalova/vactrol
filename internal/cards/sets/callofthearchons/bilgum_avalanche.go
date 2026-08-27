@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Rare
 //	Power:  5
-//	Armor:  0
 //	Traits: Giant
 //
 //	After you forge a key, deal 2 damage to each enemy creature.

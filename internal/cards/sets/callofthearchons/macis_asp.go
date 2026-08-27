@@ -8,7 +8,6 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Type:   Creature
 //	Rarity: Uncommon
 //	Power:  3
-//	Armor:  0
 //	Traits: Beast
 //
 //	Skirmish. Poison.
