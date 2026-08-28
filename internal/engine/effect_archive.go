@@ -59,3 +59,24 @@ func (e ArchiveTopOfDeck) Resolve(ctx *EffectContext) {
 		}
 	}
 }
+
+// DiscardArchives moves all of a player's archived cards into their discard pile.
+type DiscardArchives struct {
+	Player Player
+}
+
+// Text renders the effect, e.g. "your opponent discards each of their archived
+// cards".
+func (e DiscardArchives) Text() string {
+	if e.Player == Opponent {
+		return "your opponent discards each of their archived cards"
+	}
+	return "discard each of your archived cards"
+}
+
+// Resolve discards the chosen player's archives. The active player performs the
+// discard, so discardArchives randomizes the order for an opponent's archives
+// (which they cannot see) and lets them order their own.
+func (e DiscardArchives) Resolve(ctx *EffectContext) {
+	ctx.Resolver.DiscardArchives(ctx.PlayerFor(e.Player))
+}

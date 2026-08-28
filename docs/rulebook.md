@@ -126,6 +126,10 @@ combatant was destroyed; the destroyed creature is the one referred to as
 
 This ability resolves after its controller forges a key.
 
+### After You Play an Artifact
+
+This ability resolves after its controller plays an artifact.
+
 ### Before Fight
 
 A Before Fight ability resolves when a creature is used to fight, before any

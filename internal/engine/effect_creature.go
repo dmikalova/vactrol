@@ -48,7 +48,7 @@ func (FightVerb) Apply(ctx *EffectContext, target LocalID) {
 		ctx.Resolver.Logf("%s has no creature to fight", ctx.Resolver.Name(target))
 		return
 	}
-	ctx.Resolver.ForceFight(target, victim)
+	ctx.Resolver.FightWith(target, victim)
 }
 
 // OnChosenCreature picks a single friendly or enemy creature and applies one or
@@ -59,7 +59,10 @@ type OnChosenCreature struct {
 	// Neighbors restricts the choice to the source creature's battleline
 	// neighbors instead of any friendly/enemy creature ("a neighboring creature").
 	Neighbors bool
-	Verbs     []CreatureVerb
+	// ExcludeHouse, when set, drops candidates of that house ("a friendly
+	// non-Sanctum creature").
+	ExcludeHouse House
+	Verbs        []CreatureVerb
 }
 
 // noun renders the target noun phrase.
@@ -69,6 +72,9 @@ func (e OnChosenCreature) noun() string {
 	}
 	if e.Player == Opponent {
 		return "an enemy creature"
+	}
+	if e.ExcludeHouse != HouseNone {
+		return "a friendly non-" + e.ExcludeHouse.String() + " creature"
 	}
 	return "a friendly creature"
 }
@@ -89,6 +95,15 @@ func (e OnChosenCreature) Resolve(ctx *EffectContext) {
 	if e.Neighbors {
 		candidates = neighbors(ctx, ctx.Source)
 	}
+	if e.ExcludeHouse != HouseNone {
+		kept := make([]LocalID, 0, len(candidates))
+		for _, id := range candidates {
+			if ctx.Resolver.House(id) != e.ExcludeHouse {
+				kept = append(kept, id)
+			}
+		}
+		candidates = kept
+	}
 	chosen, ok := ctx.Resolver.ChooseCreature(ctx.Controller, "Choose "+e.noun(), candidates)
 	if !ok {
 		ctx.Resolver.Logf("no legal target for %q", e.Text())
@@ -97,4 +112,35 @@ func (e OnChosenCreature) Resolve(ctx *EffectContext) {
 	for _, v := range e.Verbs {
 		v.Apply(ctx, chosen)
 	}
+}
+
+// UseVerb uses the chosen creature. The controller picks how to use it — reap,
+// fight, or its "Action:" ability — and that use resolves completely, nesting any
+// further uses it triggers, before control returns. This is "Use a friendly
+// creature": a creature can only be used while ready, so an already-exhausted
+// creature may be chosen but nothing happens when it is used.
+type UseVerb struct{}
+
+// VerbText returns the verb phrase.
+func (UseVerb) VerbText() string { return "use" }
+
+// Apply offers the controller the target's available uses and resolves the chosen
+// one.
+func (UseVerb) Apply(ctx *EffectContext, target LocalID) {
+	owner := ctx.Resolver.Owner(target)
+	labels := []string{"reap"}
+	uses := []func(){func() { ctx.Resolver.ReapWith(target) }}
+	if len(ctx.Resolver.Battleline(1-owner)) > 0 {
+		labels = append(labels, "fight")
+		uses = append(uses, func() { FightVerb{}.Apply(ctx, target) })
+	}
+	if ctx.Resolver.HasAction(target) {
+		labels = append(labels, "use its action")
+		uses = append(uses, func() { ctx.Resolver.UseActionOf(target) })
+	}
+	idx := ctx.Resolver.ChooseOption(owner, "Choose how to use "+ctx.Resolver.Name(target), labels)
+	if idx < 0 || idx >= len(uses) {
+		return
+	}
+	uses[idx]()
 }

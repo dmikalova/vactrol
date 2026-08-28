@@ -164,6 +164,10 @@ const (
 	//
 	//rulebook:ability After a Creature Is Destroyed Fighting
 	TriggerAfterDestroyedFighting
+	// This ability resolves after its controller plays an artifact.
+	//
+	//rulebook:ability After You Play an Artifact
+	TriggerAfterArtifactPlayed
 )
 
 // prefix returns the printed text prefix for a trigger and whether the effect
@@ -189,6 +193,8 @@ func (t Trigger) prefix() (text string, capitalizeEffect bool) {
 		return "After a creature enters play, ", false
 	case TriggerAfterDestroyedFighting:
 		return "After a creature is destroyed fighting " + SelfName + ", ", false
+	case TriggerAfterArtifactPlayed:
+		return "After you play an artifact, ", false
 	default:
 		return "", true
 	}

@@ -35,6 +35,7 @@ func TestAllTriggerPrefixes(t *testing.T) {
 		TriggerAfterForgeKey:          "After you forge a key, gain 1 Æmber.",
 		TriggerAfterCreatureEnters:    "After a creature enters play, gain 1 Æmber.",
 		TriggerAfterDestroyedFighting: "After a creature is destroyed fighting {self}, gain 1 Æmber.",
+		TriggerAfterArtifactPlayed:    "After you play an artifact, gain 1 Æmber.",
 	}
 	for tr, want := range cases {
 		got := RenderAbility(Ability{Trigger: tr, Effect: GainAember{Amount: 1}})

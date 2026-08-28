@@ -21,13 +21,18 @@ func (OpponentForgedKeys) Value(ctx *EffectContext) int {
 // CountText renders the singular noun the "for each" clause repeats.
 func (OpponentForgedKeys) CountText() string { return "key your opponent has forged" }
 
-// CardsInArchives counts the cards in the controller's archives.
-type CardsInArchives struct{}
+// CardsInArchives counts the cards in a player's archives.
+type CardsInArchives struct{ Player Player }
 
-// Value returns how many cards the controller has archived.
-func (CardsInArchives) Value(ctx *EffectContext) int {
-	return len(ctx.Resolver.Archives(ctx.Controller))
+// Value returns how many cards the chosen player has archived.
+func (e CardsInArchives) Value(ctx *EffectContext) int {
+	return len(ctx.Resolver.Archives(ctx.PlayerFor(e.Player)))
 }
 
 // CountText renders the singular noun the "for each" clause repeats.
-func (CardsInArchives) CountText() string { return "card in your archives" }
+func (e CardsInArchives) CountText() string {
+	if e.Player == Opponent {
+		return "card in your opponent's archives"
+	}
+	return "card in your archives"
+}

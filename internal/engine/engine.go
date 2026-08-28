@@ -158,6 +158,28 @@ func (g *Game) archiveTopOfDeck(player int) bool {
 	return true
 }
 
+// discardArchives moves all of a player's archived cards to their discard pile.
+// The active player performs the discard, so they choose the order when it is
+// their own archives but cannot when it is an opponent's — those enter the
+// discard in a random order, since the active player cannot see them.
+func (g *Game) discardArchives(owner int) {
+	arc := &g.State.Archives[owner]
+	if arc.Count == 0 {
+		return
+	}
+	ids := cloneIDs(arc.slice())
+	if owner == g.State.ActivePlayer {
+		ids = g.orderByChoice(owner, "Choose the order to discard your archives", ids)
+	} else {
+		g.rng.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
+	}
+	*arc = Zone{}
+	for _, id := range ids {
+		g.State.Discard[owner].add(id)
+	}
+	g.logf("%s discards %d archived card(s)", g.names[owner], len(ids))
+}
+
 // PlayCreature plays a creature from hand onto the battleline. flankLeft places it
 // on the left flank; otherwise it goes to the right flank.
 func (g *Game) PlayCreature(player, handIndex int, flankLeft bool) (LocalID, error) {
@@ -191,6 +213,7 @@ func (g *Game) PlayArtifact(player, handIndex int) (LocalID, error) {
 	g.logf("%s plays artifact %s", g.names[player], g.Name(id))
 	g.applyAemberBonus(id)
 	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
+	g.fireArtifactPlayed(player, id)
 	return id, nil
 }
 
@@ -271,14 +294,22 @@ func (g *Game) Reap(player int, id LocalID) error {
 	if err := g.canUse(player, id); err != nil {
 		return err
 	}
-	if g.recoverFromStun(id) {
-		return nil
-	}
-	g.State.Cards[id].Exhausted = true
-	g.State.Aember[player]++
-	g.logf("%s reaps with %s (+1 Æmber)", g.names[player], g.Name(id))
-	g.triggerAbilities(id, TriggerAfterReap, 0, false)
+	g.reapWith(id)
 	return nil
+}
+
+// reapWith performs a reap driven by a rule or ability, with no active-player or
+// active-house checks: a stunned creature recovers instead; otherwise it
+// exhausts, its controller gains 1 Æmber, and its "Reap:" abilities fire.
+func (g *Game) reapWith(id LocalID) {
+	if g.recoverFromStun(id) {
+		return
+	}
+	p := g.owner(id)
+	g.State.Cards[id].Exhausted = true
+	g.State.Aember[p]++
+	g.logf("%s reaps with %s (+1 Æmber)", g.names[p], g.Name(id))
+	g.triggerAbilities(id, TriggerAfterReap, 0, false)
 }
 
 // UseAction uses a creature's or artifact's "Action:" ability.
@@ -289,13 +320,19 @@ func (g *Game) UseAction(player int, id LocalID) error {
 	if !g.cat.def(id).hasTrigger(TriggerAction) {
 		return ErrWrongType
 	}
+	g.useActionOf(id)
+	return nil
+}
+
+// useActionOf fires a card's "Action:" ability, driven by a rule or ability: a
+// stunned card recovers instead; otherwise it exhausts and its "Action:" fires.
+func (g *Game) useActionOf(id LocalID) {
 	if g.recoverFromStun(id) {
-		return nil
+		return
 	}
 	g.State.Cards[id].Exhausted = true
-	g.logf("%s uses %s's action ability", g.names[player], g.Name(id))
+	g.logf("%s uses %s's action ability", g.names[g.owner(id)], g.Name(id))
 	g.triggerAbilities(id, TriggerAction, 0, false)
-	return nil
 }
 
 // Fight uses attacker to fight the enemy creature defender.
@@ -383,6 +420,18 @@ func (g *Game) recoverFromStun(id LocalID) bool {
 	core.Stunned = false
 	core.Exhausted = true
 	g.logf("%s recovers from stun instead of acting", g.Name(id))
+	return true
+}
+
+// readyToUse reports whether a creature may be used by an ability right now. A
+// creature can only be used while ready: an ability may still target an exhausted
+// creature, but using it then does nothing. Unlike canUse this ignores the active
+// player and active house — ability-driven use cares only about readiness.
+func (g *Game) readyToUse(id LocalID) bool {
+	if g.State.Cards[id].Exhausted {
+		g.logf("%s is exhausted and cannot be used", g.Name(id))
+		return false
+	}
 	return true
 }
 
@@ -643,6 +692,17 @@ func (g *Game) fireCreatureEnters(entered LocalID) {
 			}
 			g.triggerAbilities(id, TriggerAfterCreatureEnters, entered, true)
 		}
+	}
+}
+
+// fireArtifactPlayed fires "after you play an artifact" abilities on the playing
+// player's other in-play cards, with the played artifact as "it".
+func (g *Game) fireArtifactPlayed(player int, artifact LocalID) {
+	for _, id := range g.allInPlay(player) {
+		if id == artifact {
+			continue
+		}
+		g.triggerAbilities(id, TriggerAfterArtifactPlayed, artifact, true)
 	}
 }
 

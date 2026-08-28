@@ -33,6 +33,151 @@ func TestFightVerbNoEnemy(t *testing.T) {
 	}
 }
 
+// actor builds a creature with an "Action:" ability that gains 5 Æmber.
+func actor(g *Game) LocalID {
+	return g.AddToBattleline(NewCard("actor", Brobnar, Creature, Common, WithPower(3),
+		WithAbility(TriggerAction, GainAember{Amount: 5})), 0)
+}
+
+func TestUseVerb(t *testing.T) {
+	ctxFor := func(g *Game, id LocalID) *EffectContext {
+		return &EffectContext{Resolver: g, Source: id, Controller: 0}
+	}
+
+	// Reap (default option 0): +1 Æmber, no action fired.
+	g := NewGame("A", "B", 1)
+	target := actor(g)
+	UseVerb{}.Apply(ctxFor(g, target), target)
+	if g.Aember(0) != 1 {
+		t.Errorf("reap use: aember = %d, want 1", g.Aember(0))
+	}
+
+	// Fight (option 1, present because there is an enemy).
+	g = NewGame("A", "B", 1)
+	target = actor(g)
+	foe := g.AddToBattleline(testCreature("foe", 5), 1)
+	g.SetChooser(0, optionPicker{idx: 1})
+	UseVerb{}.Apply(ctxFor(g, target), target)
+	if g.Damage(foe) != 3 {
+		t.Errorf("fight use: foe damage = %d, want 3", g.Damage(foe))
+	}
+
+	// Use its action (option 2: reap, fight, use its action).
+	g = NewGame("A", "B", 1)
+	target = actor(g)
+	g.AddToBattleline(testCreature("foe", 5), 1)
+	g.SetChooser(0, optionPicker{idx: 2})
+	UseVerb{}.Apply(ctxFor(g, target), target)
+	if g.Aember(0) != 5 {
+		t.Errorf("action use: aember = %d, want 5", g.Aember(0))
+	}
+
+	// Out-of-range option: nothing happens.
+	g = NewGame("A", "B", 1)
+	target = actor(g)
+	g.SetChooser(0, optionPicker{idx: 99})
+	UseVerb{}.Apply(ctxFor(g, target), target)
+	if g.Aember(0) != 0 || g.Exhausted(target) {
+		t.Error("out-of-range use should do nothing")
+	}
+}
+
+// A creature can only be used while ready. An exhausted creature may still be
+// chosen to be used, but reaping, fighting, or using its action does nothing.
+func TestUsingExhaustedCreatureDoesNothing(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	c := actor(g) // has an "Action:" that would gain 5 Æmber
+	foe := g.AddToBattleline(testCreature("foe", 5), 1)
+	g.State.Cards[c].Exhausted = true
+
+	g.ReapWith(c)
+	g.FightWith(c, foe)
+	g.UseActionOf(c)
+
+	if g.Aember(0) != 0 {
+		t.Errorf("aember = %d, want 0 (an exhausted creature cannot be used)", g.Aember(0))
+	}
+	if g.Damage(foe) != 0 {
+		t.Errorf("foe damage = %d, want 0 (an exhausted creature cannot fight)", g.Damage(foe))
+	}
+}
+
+func TestOnChosenCreatureExcludeHouse(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	sanc := g.AddToBattleline(NewCard("s", Sanctum, Creature, Common, WithPower(3)), 0)
+	mars := g.AddToBattleline(NewCard("m", Mars, Creature, Common, WithPower(3)), 0)
+	g.State.Cards[mars].Exhausted = true
+	ctx := &EffectContext{Resolver: g, Source: sanc, Controller: 0}
+
+	e := OnChosenCreature{ExcludeHouse: Sanctum, Verbs: []CreatureVerb{ReadyVerb{}}}
+	if e.Text() != "ready a friendly non-Sanctum creature" {
+		t.Errorf("text = %q", e.Text())
+	}
+	// The Sanctum creature is excluded, so the readied creature must be the Mars one.
+	e.Resolve(ctx)
+	if g.Exhausted(mars) {
+		t.Error("the non-Sanctum creature should have been readied")
+	}
+}
+
+// idChooser picks a specific creature by id (and no "choose one" option).
+type idChooser struct {
+	FirstChooser
+	id LocalID
+}
+
+func (c idChooser) ChooseCreature(_ string, cands []LocalID) (LocalID, bool) {
+	for _, x := range cands {
+		if x == c.id {
+			return x, true
+		}
+	}
+	return 0, false
+}
+
+func TestUseVerbNesting(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	// A's "Reap:" uses a friendly creature; B is the one it uses (to reap).
+	a := g.AddToBattleline(NewCard("A", Brobnar, Creature, Common, WithPower(3),
+		WithAbility(TriggerAfterReap, OnChosenCreature{Verbs: []CreatureVerb{UseVerb{}}})), 0)
+	b := g.AddToBattleline(testCreature("B", 3), 0)
+	g.SetChooser(0, idChooser{id: b}) // use B, not A itself
+
+	// Reaping A resolves A's window, which nests B's reap fully before returning.
+	g.reapWith(a)
+	if g.Aember(0) != 2 { // A's reap (+1) and B's nested reap (+1)
+		t.Errorf("aember = %d, want 2 (A's reap + B's nested reap)", g.Aember(0))
+	}
+}
+
+// gameEffect is a test-only effect that runs an arbitrary closure over the game.
+type gameEffect struct{ fn func() }
+
+func (gameEffect) Text() string             { return "test" }
+func (e gameEffect) Resolve(*EffectContext) { e.fn() }
+
+func TestTriggerWindowPicksUpNewlyGrantedAbility(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	var a LocalID
+	// A's printed Reap ability attaches an upgrade to A that grants a NEW
+	// "Reap: gain 3 Æmber". Because A is still inside its reap window, the newly
+	// granted ability fires in the same window.
+	attach := gameEffect{fn: func() {
+		up := g.Register(NewCard("boost", Brobnar, Upgrade, Common,
+			WithStatic(StaticModifier{Granted: []Ability{{Trigger: TriggerAfterReap, Effect: GainAember{Amount: 3}}}})), 0)
+		core := &g.State.Cards[a]
+		core.Upgrades[core.UpgradeCount] = up
+		core.UpgradeCount++
+	}}
+	a = g.AddToBattleline(NewCard("A", Brobnar, Creature, Common, WithPower(2),
+		WithAbility(TriggerAfterReap, attach)), 0)
+
+	g.reapWith(a)
+	if g.Aember(0) != 4 { // 1 (reap) + 3 (newly granted after-reap)
+		t.Errorf("aember = %d, want 4 (reap + newly granted after-reap)", g.Aember(0))
+	}
+}
+
 func TestOnChosenCreatureNeighbors(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	g.AddToBattleline(testCreature("far", 5), 0) // NOT a neighbor of src

@@ -79,6 +79,10 @@ type Resolver interface {
 	// ArchiveTopOfDeck moves the top card of a player's deck to their archives,
 	// reporting whether a card was available.
 	ArchiveTopOfDeck(player int) bool
+	// DiscardArchives moves all of a player's archived cards to their discard pile.
+	// The active player performs the discard, so they choose the order for their own
+	// archives but get a random order for an opponent's (which they cannot see).
+	DiscardArchives(owner int)
 	// ReturnFromDiscardToHand moves a card from its owner's discard to their hand.
 	ReturnFromDiscardToHand(id LocalID)
 	// ReturnFromDiscardToTopOfDeck moves a card from its owner's discard to the top
@@ -91,9 +95,20 @@ type Resolver interface {
 	// ChooseOption asks a player to pick one of several labeled options, returning
 	// its index (0 when the player's chooser expresses no preference).
 	ChooseOption(player int, prompt string, options []string) int
-	// ForceFight makes attacker fight defender (an ability-driven fight, with no
-	// use/validation checks).
-	ForceFight(attacker, defender LocalID)
+	// FightWith makes attacker fight defender (ability-driven, ignoring active
+	// player and house). A creature can only be used while ready, so an exhausted
+	// attacker may be chosen but does nothing.
+	FightWith(attacker, defender LocalID)
+	// ReapWith reaps with a creature (ability-driven, ignoring active player and
+	// house). A creature can only be used while ready, so an exhausted creature may
+	// be chosen but does nothing.
+	ReapWith(id LocalID)
+	// UseActionOf fires a card's "Action:" ability (ability-driven, ignoring active
+	// player and house). A card can only be used while ready, so an exhausted card
+	// may be chosen but does nothing.
+	UseActionOf(id LocalID)
+	// HasAction reports whether a card has an "Action:" ability.
+	HasAction(id LocalID) bool
 	// Logf writes a line to the game log.
 	Logf(format string, args ...any)
 }
@@ -168,6 +183,9 @@ func (g *Game) ArchiveFromHand(id LocalID) { g.archiveFromHand(g.owner(id), id) 
 // ArchiveTopOfDeck moves the top card of a player's deck to their archives.
 func (g *Game) ArchiveTopOfDeck(player int) bool { return g.archiveTopOfDeck(player) }
 
+// DiscardArchives moves all of a player's archived cards to their discard pile.
+func (g *Game) DiscardArchives(owner int) { g.discardArchives(owner) }
+
 // ReturnFromDiscardToHand moves a card from its owner's discard pile to their hand.
 func (g *Game) ReturnFromDiscardToHand(id LocalID) {
 	o := g.owner(id)
@@ -205,9 +223,35 @@ func (g *Game) ChooseOption(player int, prompt string, options []string) int {
 	return 0
 }
 
-// ForceFight makes attacker fight defender with no use/validation checks; it is
-// how an ability drives a creature into combat.
-func (g *Game) ForceFight(attacker, defender LocalID) { g.fight(attacker, defender) }
+// FightWith makes attacker fight defender, ability-driven (ignoring active player
+// and house). A creature can only be used while ready, so an exhausted attacker
+// does nothing.
+func (g *Game) FightWith(attacker, defender LocalID) {
+	if g.readyToUse(attacker) {
+		g.fight(attacker, defender)
+	}
+}
+
+// ReapWith reaps with a creature, ability-driven (ignoring active player and
+// house). A creature can only be used while ready, so an exhausted creature does
+// nothing.
+func (g *Game) ReapWith(id LocalID) {
+	if g.readyToUse(id) {
+		g.reapWith(id)
+	}
+}
+
+// UseActionOf fires a card's "Action:" ability, ability-driven (ignoring active
+// player and house). A card can only be used while ready, so an exhausted card
+// does nothing.
+func (g *Game) UseActionOf(id LocalID) {
+	if g.readyToUse(id) {
+		g.useActionOf(id)
+	}
+}
+
+// HasAction reports whether a card has an "Action:" ability.
+func (g *Game) HasAction(id LocalID) bool { return g.cat.def(id).hasTrigger(TriggerAction) }
 
 // Logf writes a line to the game log.
 func (g *Game) Logf(format string, args ...any) { g.logf(format, args...) }

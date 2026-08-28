@@ -58,11 +58,13 @@ type (
 	OpponentAemberExactly = engine.OpponentAemberExactly
 	ReadyVerb             = engine.ReadyVerb
 	FightVerb             = engine.FightVerb
+	UseVerb               = engine.UseVerb
 	ReturnToDeck          = engine.ReturnToDeck
 	ReturnToHand          = engine.ReturnToHand
 	ReturnToArchives      = engine.ReturnToArchives
 	ArchiveFromHand       = engine.ArchiveFromHand
 	ArchiveTopOfDeck      = engine.ArchiveTopOfDeck
+	DiscardArchives       = engine.DiscardArchives
 	ReturnFromDiscard     = engine.ReturnFromDiscard
 	ForgeKey              = engine.ForgeKey
 	OpponentForgedKeys    = engine.OpponentForgedKeys
@@ -198,6 +200,7 @@ var Trigger = triggers{
 	AfterCreatureEnters:    engine.TriggerAfterCreatureEnters,
 	Destroyed:              engine.TriggerDestroyed,
 	AfterDestroyedFighting: engine.TriggerAfterDestroyedFighting,
+	AfterArtifactPlayed:    engine.TriggerAfterArtifactPlayed,
 }
 
 type triggers struct {
@@ -209,7 +212,8 @@ type triggers struct {
 	AfterForgeKey,
 	AfterCreatureEnters,
 	Destroyed,
-	AfterDestroyedFighting engine.Trigger
+	AfterDestroyedFighting,
+	AfterArtifactPlayed engine.Trigger
 }
 
 // Controller and Opponent are the two players an effect can target,
