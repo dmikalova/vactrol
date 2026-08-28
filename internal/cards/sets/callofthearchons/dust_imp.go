@@ -4,21 +4,21 @@ import "github.com/dmikalova/vactrol/internal/card"
 
 // Dust Imp
 //
-//	House:  Untamed
+//	House:  Dis
 //	Type:   Creature
 //	Rarity: Common
-//	Power:  1
+//	Power:  2
 //	Traits: Imp
 //
-//	Reap: Gain 1 Æmber.
+//	Destroyed: Gain 2 Æmber.
 var DustImp = card.New(
 	"Dust Imp",
-	card.House.Untamed,
+	card.House.Dis,
 	card.Type.Creature,
 	card.Rarity.Common,
 	card.Provenance(card.CotA, 83),
-	card.WithPower(1),
+	card.WithPower(2),
 	card.WithTraits("Imp"),
 	card.WithAbility(
-		card.Trigger.Reap, card.GainAember{Amount: 1}),
+		card.Trigger.Destroyed, card.GainAember{Amount: 2}),
 )

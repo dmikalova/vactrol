@@ -63,6 +63,52 @@ func TestTakeFromHandErrors(t *testing.T) {
 	}
 }
 
+// TestVersatileIgnoresActiveHouse verifies that Versatile relaxes only USING an
+// in-play card, not playing it: a Versatile creature already in play may be used
+// out of house (keyword printed or granted by an upgrade), but a Versatile card
+// still cannot be played from hand while another house is active.
+func TestVersatileIgnoresActiveHouse(t *testing.T) {
+	g := started(t) // Brobnar is the active house.
+
+	// A Versatile creature already in play, of another house, can still be used.
+	versatile := NewCard("Free Agent", Dis, Creature, Common, WithPower(3), WithKeywords(Versatile))
+	vid := g.AddToBattleline(versatile, 0)
+	if err := g.Reap(0, vid); err != nil {
+		t.Fatalf("reap Versatile in play out of house: %v", err)
+	}
+
+	// Versatile does not let it be PLAYED from hand out of house, though.
+	hid := g.AddToHand(versatile, 0)
+	if _, err := g.PlayCreature(0, handIdxByID(g, 0, hid), false); err != ErrWrongHouse {
+		t.Errorf("play Versatile out of house err = %v, want ErrWrongHouse", err)
+	}
+
+	// A non-Versatile creature of the wrong house cannot be used either.
+	dis := g.AddToBattleline(NewCard("Dissonant", Dis, Creature, Common, WithPower(2)), 0)
+	if err := g.Reap(0, dis); err != ErrWrongHouse {
+		t.Errorf("non-Versatile reap err = %v, want ErrWrongHouse", err)
+	}
+
+	// Versatile granted by an attached upgrade also relaxes using the host.
+	mantle := g.AddToHand(NewCard("Mantle", Sanctum, Upgrade, Rare,
+		WithStatic(StaticModifier{Keywords: []Keyword{Versatile}})), 0)
+	core := &g.State.Cards[dis]
+	core.Upgrades[core.UpgradeCount] = mantle
+	core.UpgradeCount++
+	if !g.usableInActiveHouse(dis) {
+		t.Error("granted Versatile should let the host be used out of house")
+	}
+
+	// With no house chosen, any card may be played or used.
+	g.State.ActiveHouse = HouseNone
+	if !g.inActiveHouse(&versatile) {
+		t.Error("no active house should allow playing any card")
+	}
+	if !g.usableInActiveHouse(dis) {
+		t.Error("no active house should allow using any card")
+	}
+}
+
 func TestPlayArtifactAndAction(t *testing.T) {
 	g := started(t)
 	g.AddToHand(exAutocannon(), 0)

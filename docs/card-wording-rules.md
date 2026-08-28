@@ -73,8 +73,8 @@ Mines, Nepenthe Seed.)
 
 | Original                                                            | Curated                                                      |
 | ------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `Return an enemy creature to its owner's hand.`                     | `Put an enemy creature into its owner's hand.`              |
-| `Return Bad Penny to your hand.`                                    | `Put Bad Penny into your hand.`                             |
+| `Return an enemy creature to its owner's hand.`                     | `Put an enemy creature into its owner's hand.`               |
+| `Return Bad Penny to your hand.`                                    | `Put Bad Penny into your hand.`                              |
 | `Return a creature from your discard pile to the top of your deck.` | `Put a creature from your discard pile on top of your deck.` |
 
 One movement verb (`Put`) covers every destination: `into … hand(s)`,
@@ -139,16 +139,16 @@ The rule by context:
   names itself: `Charette captures 3 Aember`, `Valdr deals +2 Damage …`,
   `fully heal Chuff Ape`. Capture and static modifiers bind to that specific
   creature, so the name carries meaning.
-    - **Capture always names its target:** the
-  target is now always specified (an unspecified target used to default to the
-  source creature), so the capturing creature is stated explicitly rather than
-  left implicit.
+  - **Capture always names its target:** the
+    target is now always specified (an unspecified target used to default to the
+    source creature), so the capturing creature is stated explicitly rather than
+    left implicit.
 - **On a creature, for a one-shot action with no lingering attachment to the
   source** — imperative, no name: `Deal 1 Damage to each enemy creature`,
   `Ready and fight with a friendly creature`.
 - **On an upgrade or inside a granted quoted ability** — use `this creature` /
   `its`, since the host can vary: `Fully heal this creature`, `Put this creature
-  into its owner's archives`.
+into its owner's archives`.
 
 ## 8. `Choose one` renders as a bulleted list
 
@@ -194,11 +194,11 @@ threshold self-checks use `fewer than N … this way`
 
 Longhand descriptions are replaced by the canonical keyword/verb.
 
-| Original                                                                                  | Curated                            | Keyword   |
-| ----------------------------------------------------------------------------------------- | ---------------------------------- | --------- |
-| `Place 2 Aember from the common supply on an enemy creature.`                             | `Exalt an enemy creature 2 times.` | Exalt     |
-| `This creature gains, "You may use this creature as if it belonged to the active house."` | `This creature gains versatile.`   | versatile |
-| `This creature belongs to all houses.`                                                    | `This creature gains versatile.`   | versatile |
+| Original                                                                                  | Curated                                                             | Keyword          |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------- |
+| `Place 2 Aember from the common supply on an enemy creature.`                             | `Exalt an enemy creature 2 times.`                                  | Exalt            |
+| `This creature gains, "You may use this creature as if it belonged to the active house."` | `This creature gains versatile.`                                    | versatile        |
+| `This creature belongs to all houses.`                                                    | `This creature gains versatile.`                                    | versatile        |
 | `Omni: Destroy Gorm of Omm. Destroy an artifact.`                                         | `Versatile.`<br>`Action: Destroy Gorm of Omm. Destroy an artifact.` | Omni → versatile |
 
 **Omni** abilities are re-expressed as **Versatile** plus an `Action:` ability.
@@ -226,14 +226,14 @@ use-time.
 
 ## 15. `Damage` vs `damage` (damage-icon casing)
 
-Capitalize **`Damage`** only where the game *deals* it — the printed card shows a
+Capitalize **`Damage`** only where the game _deals_ it — the printed card shows a
 damage icon there: `Deal 2 Damage`, `+2 Damage`. Every other
 use is lowercase.
 
-| Context                        | Casing    | Example                                                  |
-| ------------------------------ | --------- | -------------------------------------------------------- |
-| Dealing damage (icon)          | `Damage`  | `Deal 3 Damage to each creature.`                        |
-| Healing / referring to damage  | `damage`  | `Heal 3 damage from a creature.` / `a damaged creature.` |
+| Context                       | Casing   | Example                                                  |
+| ----------------------------- | -------- | -------------------------------------------------------- |
+| Dealing damage (icon)         | `Damage` | `Deal 3 Damage to each creature.`                        |
+| Healing / referring to damage | `damage` | `Heal 3 damage from a creature.` / `a damaged creature.` |
 
 ## 16. Spelling, qualifiers, and referents
 
@@ -244,6 +244,19 @@ use is lowercase.
 - **`during their next turn`** — not `on their next turn`.
 - **`the chosen creature`** — the standard referent for a creature just chosen
   (`Choose a creature. … the chosen creature`).
+
+## 17. Name the source zone for card-movement effects
+
+Effects that move a card between zones name the zone explicitly, so the text is
+unambiguous about _where from_.
+
+| Original          | Curated                          |
+| ----------------- | -------------------------------- |
+| `Archive a card.` | `Archive a card from your hand.` |
+
+Applies to archiving (`from your hand`, `the top card of your deck`) and any
+future zone-to-zone movement (hand, deck, discard, archives). `Archive` alone
+never implies the hand.
 
 ---
 

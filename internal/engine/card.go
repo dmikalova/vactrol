@@ -19,10 +19,17 @@ type CardDefinition struct {
 
 	Keywords []Keyword
 
-	// Assault deals this much damage to the creature this one attacks, before
-	// fight damage; Hazardous deals this much to a creature that attacks this one.
-	// Zero means the creature does not have that numeric keyword.
-	Assault   int
+	// A creature with Assault N deals N damage to the creature it attacks,
+	// immediately before combat damage is dealt. Zero means the creature does not
+	// have Assault.
+	//
+	//rulebook:keyword Assault
+	Assault int
+	// A creature with Hazardous N deals N damage to any creature that attacks it,
+	// before that attacker deals its combat damage. Zero means the creature does
+	// not have Hazardous.
+	//
+	//rulebook:keyword Hazardous
 	Hazardous int
 
 	// AemberBonus is the number of Æmber "pips" printed on the card; the
@@ -47,6 +54,10 @@ type StaticModifier struct {
 	// Granted are triggered abilities the Upgrade grants its host creature. The
 	// host fires them as if they were printed on it (see Game.triggerAbilities).
 	Granted []Ability
+
+	// Keywords are keywords the Upgrade grants its host creature; the host has
+	// them in addition to its own (see Game.hasKeyword).
+	Keywords []Keyword
 }
 
 // Ability pairs a trigger with the effect that resolves when it fires.

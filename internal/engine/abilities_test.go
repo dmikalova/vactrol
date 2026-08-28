@@ -268,6 +268,30 @@ func TestAfterDestroyedFightingTrigger(t *testing.T) {
 	}
 }
 
+func TestGrantedKeywordsFromUpgrades(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	host := g.AddToBattleline(testCreature("host", 3), 0)
+	wall := g.AddToBattleline(testCreature("wall", 10), 1)
+	// An upgrade granting elusive + skirmish. hasKeyword checks the printed
+	// keywords first, then each granted keyword.
+	attachUpgrade(g, host, NewCard("cloak", Shadows, Upgrade, Common,
+		WithStatic(StaticModifier{Keywords: []Keyword{Elusive, Skirmish}})))
+	if !g.hasKeyword(host, Skirmish) {
+		t.Fatal("granted skirmish should be reported by hasKeyword")
+	}
+	if g.hasKeyword(host, Poison) {
+		t.Fatal("hasKeyword should not report a keyword neither printed nor granted")
+	}
+	// Skirmish spares the attacker from the 10-power wall's retaliation.
+	g.fight(host, wall)
+	if !g.inPlay(host) {
+		t.Error("granted skirmish should spare the attacker")
+	}
+	if g.Damage(host) != 0 {
+		t.Errorf("attacker took %d damage, want 0 (granted skirmish)", g.Damage(host))
+	}
+}
+
 func TestStunBehavior(t *testing.T) {
 	g := started(t)
 

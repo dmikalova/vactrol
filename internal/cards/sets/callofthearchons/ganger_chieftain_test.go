@@ -7,18 +7,23 @@ import (
 	"github.com/dmikalova/vactrol/internal/engine"
 )
 
-// Ganger Chieftain is a vanilla Brobnar creature — a plain 5-power body.
+// Ganger Chieftain's Play readies and fights with a neighboring creature.
 func TestGangerChieftain(t *testing.T) {
 	g := cardtest.Started(t, engine.Brobnar)
+	// A friendly creature already in play becomes Ganger's neighbor when Ganger
+	// is played onto the flank beside it.
+	neighbor := g.AddToBattleline(cardtest.Vanilla("Neighbor", engine.Brobnar, 4), 0)
+	g.AddToBattleline(cardtest.Vanilla("Foe", engine.Mars, 1), 1)
 	g.AddToHand(GangerChieftain, 0)
-	id, err := g.PlayCreature(0, 0, false)
-	if err != nil {
+
+	if _, err := g.PlayCreature(0, 0, false); err != nil { // right flank, beside Neighbor
 		t.Fatalf("PlayCreature: %v", err)
 	}
-	if g.Power(id) != 5 {
-		t.Errorf("Ganger Chieftain power = %d, want 5", g.Power(id))
+	// The neighbor is readied and made to fight the enemy, destroying the 1-power foe.
+	if len(g.Battleline(1)) != 0 {
+		t.Error("the neighbor should have fought and destroyed the enemy")
 	}
-	if len(GangerChieftain.Abilities) != 0 {
-		t.Errorf("Ganger Chieftain should have no abilities, got %v", GangerChieftain.Abilities)
+	if !g.State.Cards[neighbor].Exhausted {
+		t.Error("the neighbor should be exhausted after fighting")
 	}
 }

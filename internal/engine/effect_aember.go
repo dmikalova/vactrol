@@ -7,34 +7,45 @@ import "fmt"
 // it is captured or placed on a creature, where it belongs to no one until that
 // creature leaves play.
 
-// GainAember adds Æmber to a player's pool. Player picks whose pool grows,
-// relative to the ability's controller.
+// To gain Æmber, a player moves that many Æmber from the common supply into
+// their pool — the ability's controller by default, or their opponent when the
+// card says so. A "for each" clause multiplies the amount by a running count.
 //
-// Gaining Æmber simply moves it from the common supply into a pool.
+//rulebook:effect Gain Æmber
 type GainAember struct {
 	Player Player
 	Amount int
+	Per    Count
 }
 
 // Text renders the effect, e.g. "gain 1 Æmber" or "your opponent gains 2 Æmber".
 func (e GainAember) Text() string {
+	phrase := fmt.Sprintf("gain %d Æmber", e.Amount)
 	if e.Player == Opponent {
-		return fmt.Sprintf("your opponent gains %d Æmber", e.Amount)
+		phrase = fmt.Sprintf("your opponent gains %d Æmber", e.Amount)
 	}
-	return fmt.Sprintf("gain %d Æmber", e.Amount)
+	if e.Per != nil {
+		phrase += " for each " + e.Per.CountText()
+	}
+	return phrase
 }
 
 // Resolve adds the Æmber to the selected player's pool.
 func (e GainAember) Resolve(ctx *EffectContext) {
 	p := ctx.PlayerFor(e.Player)
-	ctx.Resolver.SetAember(p, ctx.Resolver.Aember(p)+e.Amount)
-	ctx.Resolver.Logf("%s gains %d Æmber", ctx.Resolver.PlayerName(p), e.Amount)
+	amount := e.Amount
+	if e.Per != nil {
+		amount *= e.Per.Value(ctx)
+	}
+	ctx.Resolver.SetAember(p, ctx.Resolver.Aember(p)+amount)
+	ctx.Resolver.Logf("%s gains %d Æmber", ctx.Resolver.PlayerName(p), amount)
 }
 
-// LoseAember removes Æmber from a player's pool. Player picks whose pool shrinks.
+// To lose Æmber, a player returns that many Æmber from their pool to the common
+// supply. A pool can never go below zero, so a player told to lose more Æmber
+// than they have simply loses all of it.
 //
-// A pool can never go below zero, so a player told to lose more Æmber than they
-// have simply loses all of it.
+//rulebook:effect Lose Æmber
 type LoseAember struct {
 	Player Player
 	Amount int
@@ -56,10 +67,10 @@ func (e LoseAember) Resolve(ctx *EffectContext) {
 	ctx.Resolver.Logf("%s loses %d Æmber", ctx.Resolver.PlayerName(p), lost)
 }
 
-// StealAember moves Æmber from the opponent's pool into the controller's pool.
+// Stealing Æmber moves it from the opponent's pool into your own. You can only
+// steal as much Æmber as the opponent actually has.
 //
-// Stealing takes Æmber from the opponent and gives it to you; you can only steal
-// as much as the opponent actually has.
+//rulebook:effect Steal Æmber
 type StealAember struct {
 	Amount int
 }
@@ -76,12 +87,12 @@ func (e StealAember) Resolve(ctx *EffectContext) {
 	ctx.Resolver.Logf("%s steals %d Æmber from %s", ctx.Resolver.PlayerName(ctx.Controller), amt, ctx.Resolver.PlayerName(opp))
 }
 
-// CaptureAember moves Æmber from the opponent's pool onto the source creature.
-//
+// Capturing Æmber moves it from the opponent's pool onto the capturing creature.
 // Captured Æmber sits on the creature and counts for no player — it is out of
 // every pool until the creature leaves play, at which point it goes to the pool
-// of the creature's owner's opponent. You can only capture what the opponent
-// has.
+// of the creature's controller's opponent. You can only capture what the opponent has.
+//
+//rulebook:effect Capture Æmber
 type CaptureAember struct {
 	Amount int
 }
@@ -101,12 +112,12 @@ func (e CaptureAember) Resolve(ctx *EffectContext) {
 	ctx.Resolver.Logf("%s captures %d Æmber", ctx.Resolver.Name(ctx.Source), amt)
 }
 
-// Exalt places Æmber from the common supply onto a chosen creature. Player picks
-// whether the creature is friendly or enemy.
+// To exalt a creature is to place 1 Æmber from the common supply onto a chosen
+// friendly or enemy creature. The Æmber sits on the creature, belonging to no
+// pool, until it leaves play, then goes to the owner's opponent's pool. Exalting
+// N times places N Æmber.
 //
-// To exalt a creature is to put 1 Æmber on it; the Æmber sits on the creature
-// (belonging to no pool) until it leaves play, then goes to the owner's
-// opponent's pool. Exalting N times places N Æmber.
+//rulebook:effect Exalt
 type Exalt struct {
 	Player Player
 	Times  int

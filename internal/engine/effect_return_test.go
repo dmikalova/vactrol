@@ -37,7 +37,7 @@ func TestReturnToHandEffect(t *testing.T) {
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
 
 	e := ReturnToHand{Target: Target{Kind: TargetThisCreature}}
-	if e.Text() != "put this creature into its owner's hand" {
+	if e.Text() != "put "+SelfName+" into its owner's hand" {
 		t.Errorf("text = %q", e.Text())
 	}
 	e.Resolve(ctx)
@@ -51,5 +51,32 @@ func TestReturnToHandEffect(t *testing.T) {
 	// Returning clears the per-match state the card accrued in play.
 	if g.State.Cards[src].Damage != 0 {
 		t.Errorf("damage after return = %d, want 0", g.State.Cards[src].Damage)
+	}
+}
+
+func TestReturnToArchivesEffect(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	src := g.AddToBattleline(testCreature("src", 3), 0)
+	attachUpgrade(g, src, NewCard("plating", Mars, Upgrade, Common))
+	g.State.Cards[src].Damage = 1
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	e := ReturnToArchives{Target: Target{Kind: TargetThisCreature}}
+	if e.Text() != "put "+SelfName+" into its owner's archives" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+
+	if g.inPlay(src) {
+		t.Error("the creature should have left play")
+	}
+	if g.State.Archives[0].Count != 1 || g.State.Archives[0].IDs[0] != src {
+		t.Errorf("creature should be archived, got %v", g.State.Archives[0].IDs[:g.State.Archives[0].Count])
+	}
+	if len(g.Discard(0)) != 1 { // the upgrade sheds to the discard pile
+		t.Errorf("upgrade should be discarded; discard = %v", g.Discard(0))
+	}
+	if g.State.Cards[src].Damage != 0 {
+		t.Error("archiving should clear the creature's in-play state")
 	}
 }

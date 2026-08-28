@@ -33,6 +33,7 @@ func (g *Game) ChooseHouse(player int, house House) error {
 	}
 	g.State.ActiveHouse = house
 	g.logf("%s chooses house %s", g.names[player], house)
+	g.offerArchives(player)
 	return nil
 }
 
@@ -90,22 +91,71 @@ func (g *Game) drawTo(player, n int) {
 	}
 }
 
-// forgeKeys forges as many keys as the player can afford, firing "after you forge
-// a key" abilities for each key forged.
+// forgeKeys forges as many keys as the player can afford at the start of their
+// turn, one at a time.
 func (g *Game) forgeKeys(player int) {
-	for g.State.Aember[player] >= KeyCost {
-		g.State.Aember[player] -= KeyCost
-		g.State.Keys[player]++
-		g.logf("%s forges a key (%d/%d)", g.names[player], g.State.Keys[player], KeysToWin)
-		for _, id := range g.allInPlay(player) {
-			g.triggerAbilities(id, TriggerAfterForgeKey, 0, false)
-		}
-		if g.State.Keys[player] >= KeysToWin {
-			g.State.Winner = player
-			g.logf("%s wins the game!", g.names[player])
-			return
-		}
+	for g.State.Winner < 0 && g.State.Aember[player] >= KeyCost {
+		g.forgeOneKey(player)
 	}
+}
+
+// forgeOneKey forges a single key for a player if they can afford the current key
+// cost, paying it and firing "after you forge a key" abilities. Forging the final
+// key wins the game.
+func (g *Game) forgeOneKey(player int) {
+	if g.State.Aember[player] < KeyCost {
+		return
+	}
+	g.State.Aember[player] -= KeyCost
+	g.State.Keys[player]++
+	g.logf("%s forges a key (%d/%d)", g.names[player], g.State.Keys[player], KeysToWin)
+	for _, id := range g.allInPlay(player) {
+		g.triggerAbilities(id, TriggerAfterForgeKey, 0, false)
+	}
+	if g.State.Keys[player] >= KeysToWin {
+		g.State.Winner = player
+		g.logf("%s wins the game!", g.names[player])
+	}
+}
+
+// offerArchives asks a player — after they have chosen their house — whether to
+// take their archived cards into their hand, moving the archives to hand if they
+// accept. A player with no archived cards is not prompted.
+func (g *Game) offerArchives(player int) {
+	arc := &g.State.Archives[player]
+	if arc.Count == 0 {
+		return
+	}
+	if g.ChooseOption(player, "Take your archived cards into your hand?", []string{"Take them", "Leave them archived"}) != 0 {
+		return
+	}
+	n := arc.Count
+	for _, id := range arc.slice() {
+		g.State.Hand[player].add(id)
+	}
+	*arc = Zone{}
+	g.logf("%s takes %d card(s) from their archives into hand", g.names[player], n)
+}
+
+// archiveFromHand moves a card from a player's hand to their archives.
+func (g *Game) archiveFromHand(player int, id LocalID) {
+	if g.State.Hand[player].remove(id) {
+		g.State.Archives[player].add(id)
+		g.logf("%s archives a card", g.names[player])
+	}
+}
+
+// archiveTopOfDeck moves the top card of a player's deck to their archives,
+// reporting whether a card was available to archive.
+func (g *Game) archiveTopOfDeck(player int) bool {
+	deck := &g.State.Deck[player]
+	if deck.Count == 0 {
+		return false
+	}
+	id := deck.removeAt(0)
+	g.State.Archives[player].add(id)
+	g.logf("%s archives the top card of their deck", g.names[player])
+	return true
 }
 
 // PlayCreature plays a creature from hand onto the battleline. flankLeft places it
@@ -172,8 +222,7 @@ func (g *Game) DiscardFromHand(player, handIndex int) error {
 		return ErrCardNotInHand
 	}
 	id := hand.IDs[handIndex]
-	def := g.cat.def(id)
-	if g.State.ActiveHouse != HouseNone && def.House != g.State.ActiveHouse {
+	if !g.inActiveHouse(g.cat.def(id)) {
 		return ErrWrongHouse
 	}
 	hand.removeAt(handIndex)
@@ -200,7 +249,7 @@ func (g *Game) PlayUpgrade(player, handIndex int) (LocalID, error) {
 	if def.Type != Upgrade {
 		return 0, ErrWrongType
 	}
-	if g.State.ActiveHouse != HouseNone && def.House != g.State.ActiveHouse {
+	if !g.inActiveHouse(def) {
 		return 0, ErrWrongHouse
 	}
 	candidates := append(g.battlelineCopy(player), g.battlelineCopy(1-player)...)
@@ -264,9 +313,29 @@ func (g *Game) Fight(player int, attacker, defender LocalID) error {
 	return nil
 }
 
+// inActiveHouse reports whether a card of the given definition matches the
+// active house for the purpose of PLAYING or discarding it from hand: true when
+// no house has been chosen or the card's own house is the active house. Versatile
+// does not apply here — it only relaxes using a card already in play (see
+// usableInActiveHouse).
+func (g *Game) inActiveHouse(def *CardDefinition) bool {
+	return g.State.ActiveHouse == HouseNone || def.House == g.State.ActiveHouse
+}
+
+// usableInActiveHouse reports whether the in-play card id may be USED (reaped,
+// fought, or its action ability activated) under the active house. It holds when
+// the card is in the active house or is Versatile — printed on it or granted by
+// an attached upgrade — letting it be used as if it belonged to the active house.
+// Versatile only relaxes using: a Versatile card is still played from hand only
+// when its own house is active.
+func (g *Game) usableInActiveHouse(id LocalID) bool {
+	return g.inActiveHouse(g.cat.def(id)) || g.hasKeyword(id, Versatile)
+}
+
 // usable runs the checks shared by reaping, fighting, and using an action
 // ability: the card must be owned by the active player, in play, unexhausted, and
-// of the active house. It does not restrict by card type — callers add that.
+// usable under the active house. It does not restrict by card type — callers add
+// that.
 func (g *Game) usable(player int, id LocalID) error {
 	if g.State.Winner >= 0 {
 		return ErrGameOver
@@ -280,7 +349,7 @@ func (g *Game) usable(player int, id LocalID) error {
 	if g.State.Cards[id].Exhausted {
 		return ErrCardExhausted
 	}
-	if def := g.cat.def(id); g.State.ActiveHouse != HouseNone && def.House != g.State.ActiveHouse {
+	if !g.usableInActiveHouse(id) {
 		return ErrWrongHouse
 	}
 	return nil
@@ -334,7 +403,7 @@ func (g *Game) takeFromHand(player, handIndex int, want CardType) (LocalID, erro
 	if def.Type != want {
 		return 0, ErrWrongType
 	}
-	if g.State.ActiveHouse != HouseNone && def.House != g.State.ActiveHouse {
+	if !g.inActiveHouse(def) {
 		return 0, ErrWrongHouse
 	}
 	hand.removeAt(handIndex)
@@ -386,7 +455,7 @@ func (g *Game) fight(attacker, defender LocalID) {
 		// already in the discard before the other's "Destroyed:" ability (or the
 		// attacker's "After Fight") fires, and neither death changes the other's.
 		targets := []DamageTarget{{ID: defender, Amount: ap}}
-		if !g.cat.def(attacker).hasKeyword(Skirmish) {
+		if !g.hasKeyword(attacker, Skirmish) {
 			targets = append(targets, DamageTarget{ID: attacker, Amount: dp})
 		}
 		g.dealDamage(g.owner(attacker), targets...)
@@ -460,7 +529,7 @@ func (g *Game) shouldDestroy(id LocalID) bool {
 		return false
 	}
 	core := &g.State.Cards[id]
-	poisoned := def.hasKeyword(Poison) && core.Damage > 0
+	poisoned := g.hasKeyword(id, Poison) && core.Damage > 0
 	return int(core.Damage) >= g.Power(id) || g.Power(id) <= 0 || poisoned
 }
 
@@ -480,16 +549,26 @@ func (g *Game) resetCore(id LocalID) { g.State.Cards[id] = CardCore{} }
 func (g *Game) discardDestroyed(id LocalID) {
 	o := g.owner(id)
 	g.State.Battleline[o].remove(id)
+	g.State.Artifacts[o].remove(id)
+	g.discardUpgrades(id)
 	core := &g.State.Cards[id]
-	for i := 0; i < int(core.UpgradeCount); i++ {
-		g.State.Discard[o].add(core.Upgrades[i])
-	}
 	if core.Amber > 0 {
 		g.State.Aember[1-o] += int(core.Amber)
 		g.logf("%d Æmber on %s goes to %s's pool", core.Amber, g.Name(id), g.names[1-o])
 	}
 	g.resetCore(id)
 	g.State.Discard[o].add(id)
+}
+
+// discardUpgrades moves a card's attached upgrades to their owner's discard pile.
+// A card that leaves play — destroyed or relocated — sheds its upgrades this way;
+// they do not follow it to hand, deck, or archives.
+func (g *Game) discardUpgrades(id LocalID) {
+	o := g.owner(id)
+	core := &g.State.Cards[id]
+	for i := 0; i < int(core.UpgradeCount); i++ {
+		g.State.Discard[o].add(core.Upgrades[i])
+	}
 }
 
 // destroyTogether destroys several creatures as one simultaneous event, matching
@@ -524,6 +603,7 @@ func (g *Game) returnToTopOfDeck(id LocalID) {
 	o := g.owner(id)
 	g.State.Battleline[o].remove(id)
 	g.State.Artifacts[o].remove(id)
+	g.discardUpgrades(id)
 	g.resetCore(id)
 	g.State.Deck[o].addFront(id)
 	g.logf("%s is put on top of %s's deck", g.Name(id), g.names[o])
@@ -535,9 +615,22 @@ func (g *Game) returnToHand(id LocalID) {
 	o := g.owner(id)
 	g.State.Battleline[o].remove(id)
 	g.State.Artifacts[o].remove(id)
+	g.discardUpgrades(id)
 	g.resetCore(id)
 	g.State.Hand[o].add(id)
 	g.logf("%s is returned to %s's hand", g.Name(id), g.names[o])
+}
+
+// returnToArchives removes a card from play and places it into its owner's
+// archives, clearing the per-match state it accrued while in play.
+func (g *Game) returnToArchives(id LocalID) {
+	o := g.owner(id)
+	g.State.Battleline[o].remove(id)
+	g.State.Artifacts[o].remove(id)
+	g.discardUpgrades(id)
+	g.resetCore(id)
+	g.State.Archives[o].add(id)
+	g.logf("%s is put into %s's archives", g.Name(id), g.names[o])
 }
 
 // fireCreatureEnters fires "after a creature enters play" abilities on every other

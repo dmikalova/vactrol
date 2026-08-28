@@ -25,6 +25,36 @@ func TestGainAemberEffect(t *testing.T) {
 	}
 }
 
+func TestGainAemberPerCount(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.State.Keys[1] = 2 // opponent has forged 2 keys
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+	e := GainAember{Amount: 1, Per: OpponentForgedKeys{}}
+	if e.Text() != "gain 1 Æmber for each key your opponent has forged" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if g.Aember(0) != 2 { // 1 per each of the 2 forged keys
+		t.Errorf("aember = %d, want 2", g.Aember(0))
+	}
+}
+
+func TestGainAemberPerArchivedCards(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	for i := 0; i < 3; i++ {
+		g.State.Archives[0].add(g.Register(testCreature("a", 1), 0))
+	}
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+	e := GainAember{Amount: 1, Per: CardsInArchives{}}
+	if e.Text() != "gain 1 Æmber for each card in your archives" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if g.Aember(0) != 3 { // 1 per each of the 3 archived cards
+		t.Errorf("aember = %d, want 3", g.Aember(0))
+	}
+}
+
 func TestLoseAemberEffect(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	src := g.AddToBattleline(testCreature("src", 1), 0)

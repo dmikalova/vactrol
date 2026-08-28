@@ -2,13 +2,11 @@ package engine
 
 import "fmt"
 
-// Draw makes the controller draw cards from the top of their deck into their
-// hand.
+// Drawing puts the top card of your deck into your hand. If your deck is empty
+// when you must draw, your discard pile is shuffled to form a new deck first, so
+// you only fail to draw when both deck and discard are empty.
 //
-// Drawing puts the top card of the deck into hand. If the deck is empty when a
-// card must be drawn, the discard pile is shuffled to form a new deck first, so a
-// player only fails to draw when both deck and discard are empty (see
-// Game.drawOne).
+//rulebook:effect Draw
 type Draw struct {
 	Amount int
 }

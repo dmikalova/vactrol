@@ -1,0 +1,23 @@
+package callofthearchons
+
+import "github.com/dmikalova/vactrol/internal/card"
+
+// Blinding Light
+//
+//	House:  Sanctum
+//	Type:   Action
+//	Rarity: Common
+//	Æmber:  1
+//
+//	Play: Choose a house, then stun each creature of the chosen house.
+var BlindingLight = card.New(
+	"Blinding Light",
+	card.House.Sanctum,
+	card.Type.Action,
+	card.Rarity.Common,
+	card.Provenance(card.CotA, 213),
+	card.WithAemberBonus(1),
+	card.WithAbility(card.Trigger.Play, card.ChooseHouseThen{
+		Then: card.Stun{Target: card.Target.EachCreature.OfChosenHouse()},
+	}),
+)

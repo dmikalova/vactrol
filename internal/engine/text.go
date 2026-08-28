@@ -121,6 +121,9 @@ func staticText(m StaticModifier) string {
 	if m.HazardousBonus != 0 {
 		parts = append(parts, fmt.Sprintf("%+d hazardous", m.HazardousBonus))
 	}
+	for _, kw := range m.Keywords {
+		parts = append(parts, strings.ToLower(string(kw)))
+	}
 	if len(parts) == 0 {
 		return ""
 	}

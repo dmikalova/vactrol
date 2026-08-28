@@ -35,3 +35,23 @@ func TestDestroyEffect(t *testing.T) {
 		t.Error("non-Scientist creature should survive")
 	}
 }
+
+func TestDestroyChosenArtifact(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	mine := g.AddArtifact(exAutocannon(), 0)
+	theirs := g.AddArtifact(exAutocannon(), 1)
+	ctx := &EffectContext{Resolver: g, Source: mine, Controller: 0}
+
+	e := Destroy{Target: Target{Kind: TargetChosenArtifact}}
+	if e.Text() != "destroy an artifact" {
+		t.Errorf("text = %q", e.Text())
+	}
+	// The default chooser picks the first candidate (the controller's artifact).
+	e.Resolve(ctx)
+	if g.inPlay(mine) {
+		t.Error("the chosen artifact should be destroyed and removed from play")
+	}
+	if !g.inPlay(theirs) {
+		t.Error("the other artifact should be untouched")
+	}
+}

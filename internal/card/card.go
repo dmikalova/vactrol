@@ -51,6 +51,8 @@ type (
 	Unstun                = engine.Unstun
 	OnChosenCreature      = engine.OnChosenCreature
 	Sequence              = engine.Sequence
+	ChooseOne             = engine.ChooseOne
+	ChooseHouseThen       = engine.ChooseHouseThen
 	Conditional           = engine.Conditional
 	OpponentAemberAtLeast = engine.OpponentAemberAtLeast
 	OpponentAemberExactly = engine.OpponentAemberExactly
@@ -58,6 +60,13 @@ type (
 	FightVerb             = engine.FightVerb
 	ReturnToDeck          = engine.ReturnToDeck
 	ReturnToHand          = engine.ReturnToHand
+	ReturnToArchives      = engine.ReturnToArchives
+	ArchiveFromHand       = engine.ArchiveFromHand
+	ArchiveTopOfDeck      = engine.ArchiveTopOfDeck
+	ReturnFromDiscard     = engine.ReturnFromDiscard
+	ForgeKey              = engine.ForgeKey
+	OpponentForgedKeys    = engine.OpponentForgedKeys
+	CardsInArchives       = engine.CardsInArchives
 )
 
 // Option configures a card at construction: either a gameplay option (the With*
@@ -160,15 +169,22 @@ type rarities struct {
 
 // Keyword groups the keyword values, e.g. card.Keyword.Skirmish.
 var Keyword = keywords{
-	Skirmish: engine.Skirmish,
-	Poison:   engine.Poison,
-	Elusive:  engine.Elusive,
-	Taunt:    engine.Taunt,
+	Skirmish:  engine.Skirmish,
+	Poison:    engine.Poison,
+	Elusive:   engine.Elusive,
+	Taunt:     engine.Taunt,
+	Versatile: engine.Versatile,
 }
 
 type keywords struct {
-	Skirmish, Poison, Elusive, Taunt engine.Keyword
+	Skirmish, Poison, Elusive, Taunt, Versatile engine.Keyword
 }
+
+// Keywords builds the keyword slice for an upgrade's granted keywords, e.g.
+// card.StaticModifier{Keywords: card.Keywords(card.Keyword.Skirmish)}. It exists
+// because card.Keyword is the value namespace, so a []card.Keyword literal can't
+// be written directly.
+func Keywords(k ...engine.Keyword) []engine.Keyword { return k }
 
 // Trigger groups the ability triggers, e.g. card.Trigger.Play or
 // card.Trigger.AfterForgeKey.
@@ -217,6 +233,7 @@ var Target = targets{
 	EachEnemyCreature:         engine.Target{Kind: engine.TargetEachEnemyCreature},
 	EachArtifact:              engine.Target{Kind: engine.TargetEachArtifact},
 	EachOtherFriendlyCreature: engine.Target{Kind: engine.TargetEachOtherFriendlyCreature},
+	Artifact:                  engine.Target{Kind: engine.TargetChosenArtifact},
 }
 
 type targets struct {
@@ -228,5 +245,6 @@ type targets struct {
 	EachFriendlyCreature,
 	EachEnemyCreature,
 	EachArtifact,
-	EachOtherFriendlyCreature engine.Target
+	EachOtherFriendlyCreature,
+	Artifact engine.Target
 }

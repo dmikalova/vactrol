@@ -2,14 +2,14 @@ package engine
 
 import "fmt"
 
-// DealDamage deals a fixed amount of damage to each creature its Target selects.
+// Dealing damage places that many damage tokens on each creature the effect
+// targets; armor reduces each separate instance of damage before it lands. A
+// creature whose damage reaches or exceeds its power is destroyed. When one
+// ability deals damage to several creatures they are damaged simultaneously and
+// any that died are destroyed together, so no creature's destruction changes
+// another's.
 //
-// In KeyForge, dealing damage places that many damage tokens on a creature;
-// armor reduces each separate instance of damage before it lands. A creature
-// whose damage reaches or exceeds its power is destroyed. When one ability deals
-// damage to several creatures they are dealt damage simultaneously and any that
-// died are destroyed together, so no creature's destruction changes another's
-// (see Game.dealDamage).
+//rulebook:effect Deal Damage
 type DealDamage struct {
 	Amount int
 	Target Target

@@ -97,6 +97,7 @@ type GameState struct {
 	Deck       [2]Zone
 	Discard    [2]Zone
 	Artifacts  [2]Zone
+	Archives   [2]Zone
 
 	Aember [2]int
 	Keys   [2]int

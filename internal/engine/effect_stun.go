@@ -1,14 +1,14 @@
 package engine
 
 // Stun and Unstun apply and remove the stun status.
-//
+
 // A stun is a status placed on a creature. A stunned creature must shake off the
 // stun before it can do anything else: the next time it is used to reap, fight,
 // or use an "Action:" ability, it is exhausted and the stun is removed instead of
-// that action happening (see Game.recoverFromStun). Removing a stun by other
-// means (unstunning) frees the creature to act normally.
-
-// Stun stuns each creature the Target selects.
+// that action happening. Stunning applies this status to each creature the effect
+// targets.
+//
+//rulebook:effect Stun
 type Stun struct {
 	Target Target
 }
@@ -23,7 +23,10 @@ func (e Stun) Resolve(ctx *EffectContext) {
 	}
 }
 
-// Unstun removes the stun from each creature the Target selects.
+// Unstunning a creature removes the stun status from each creature the effect
+// targets, freeing it to act normally instead of having to shake the stun off.
+//
+//rulebook:effect Unstun
 type Unstun struct {
 	Target Target
 }

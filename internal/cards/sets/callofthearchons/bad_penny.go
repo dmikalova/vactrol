@@ -10,7 +10,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Power:  1
 //	Traits: Human • Thief
 //
-//	Destroyed: Put this creature into its owner's hand.
+//	Destroyed: Put Bad Penny into its owner's hand.
 var BadPenny = card.New(
 	"Bad Penny",
 	card.House.Shadows,

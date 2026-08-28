@@ -79,7 +79,7 @@ func TestTargetSelect(t *testing.T) {
 
 func TestTargetText(t *testing.T) {
 	cases := map[TargetKind]string{
-		TargetThisCreature:         "this creature",
+		TargetThisCreature:         SelfName,
 		TargetTriggeringCreature:   "it",
 		TargetEachCreature:         "each creature",
 		TargetEachFriendlyCreature: "each friendly creature",
@@ -106,5 +106,47 @@ func TestTargetText(t *testing.T) {
 	}
 	if got := (Target{Kind: TargetEachEnemyCreature}).NotOnFlank().Text(); got != "each enemy creature that is not on a flank" {
 		t.Errorf("not-on-flank each text = %q", got)
+	}
+	if got := (Target{Kind: TargetChosenArtifact}).Text(); got != "an artifact" {
+		t.Errorf("chosen-artifact text = %q", got)
+	}
+}
+
+func TestTargetOfHouse(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	mars := g.AddToBattleline(NewCard("m", Mars, Creature, Common, WithPower(3)), 0)
+	g.AddToBattleline(NewCard("s", Sanctum, Creature, Common, WithPower(3)), 0)
+	ctx := &EffectContext{Resolver: g, Source: mars, Controller: 0}
+
+	ids := (Target{Kind: TargetEachFriendlyCreature}).OfHouse(Mars).Select(ctx)
+	if len(ids) != 1 || ids[0] != mars {
+		t.Errorf("OfHouse(Mars) = %v, want [%d] (Sanctum creature filtered out)", ids, mars)
+	}
+	if got := (Target{Kind: TargetEachCreature}).OfHouse(Mars).Text(); got != "each Mars creature" {
+		t.Errorf("OfHouse text = %q", got)
+	}
+}
+
+func TestNeighbors(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	a := g.AddToBattleline(testCreature("a", 1), 0)
+	b := g.AddToBattleline(testCreature("b", 1), 0)
+	c := g.AddToBattleline(testCreature("c", 1), 0)
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+
+	// The left flank has only a right neighbor; the right flank only a left one.
+	if got := neighbors(ctx, a); len(got) != 1 || got[0] != b {
+		t.Errorf("left-flank neighbors = %v, want [%d]", got, b)
+	}
+	if got := neighbors(ctx, c); len(got) != 1 || got[0] != b {
+		t.Errorf("right-flank neighbors = %v, want [%d]", got, b)
+	}
+	if got := neighbors(ctx, b); len(got) != 2 || got[0] != a || got[1] != c {
+		t.Errorf("middle neighbors = %v, want [%d %d]", got, a, c)
+	}
+	// A card not in a battleline has no neighbors.
+	art := g.AddArtifact(exAutocannon(), 0)
+	if got := neighbors(ctx, art); got != nil {
+		t.Errorf("non-battleline neighbors = %v, want nil", got)
 	}
 }

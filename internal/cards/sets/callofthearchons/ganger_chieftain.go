@@ -9,6 +9,8 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Rarity: Common
 //	Power:  5
 //	Traits: Giant
+//
+//	Play: Ready and fight with a neighboring creature.
 var GangerChieftain = card.New(
 	"Ganger Chieftain",
 	card.House.Brobnar,
@@ -17,4 +19,8 @@ var GangerChieftain = card.New(
 	card.Provenance(card.CotA, 33),
 	card.WithTraits("Giant"),
 	card.WithPower(5),
+	card.WithAbility(card.Trigger.Play, card.OnChosenCreature{
+		Neighbors: true,
+		Verbs:     []card.CreatureVerb{card.ReadyVerb{}, card.FightVerb{}},
+	}),
 )

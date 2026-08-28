@@ -1,0 +1,61 @@
+package engine
+
+import "fmt"
+
+// Archiving moves cards into your archives: they are set aside face-down, out of
+// the opponent's reach, and you may take them into your hand after picking a
+// house on a later turn. Archiving from hand lets you choose which cards to set
+// aside.
+//
+//rulebook:effect Archive
+type ArchiveFromHand struct {
+	Count int
+}
+
+// Text renders the effect, e.g. "archive a card from your hand" or "archive 2
+// cards from your hand". The source zone is named explicitly.
+func (e ArchiveFromHand) Text() string {
+	if e.Count == 1 {
+		return "archive a card from your hand"
+	}
+	return fmt.Sprintf("archive %d cards from your hand", e.Count)
+}
+
+// Resolve has the controller choose and archive Count cards from their hand,
+// stopping early if the hand runs out or the choice is declined.
+func (e ArchiveFromHand) Resolve(ctx *EffectContext) {
+	for i := 0; i < e.Count; i++ {
+		hand := ctx.Resolver.Hand(ctx.Controller)
+		if len(hand) == 0 {
+			return
+		}
+		id, ok := ctx.Resolver.ChooseCreature(ctx.Controller, "Choose a card to archive", hand)
+		if !ok {
+			return
+		}
+		ctx.Resolver.ArchiveFromHand(id)
+	}
+}
+
+// ArchiveTopOfDeck moves the top Count cards of the controller's deck into their
+// archives, with no choice involved.
+type ArchiveTopOfDeck struct {
+	Count int
+}
+
+// Text renders the effect, e.g. "archive the top card of your deck".
+func (e ArchiveTopOfDeck) Text() string {
+	if e.Count == 1 {
+		return "archive the top card of your deck"
+	}
+	return fmt.Sprintf("archive the top %d cards of your deck", e.Count)
+}
+
+// Resolve archives the top cards in order, stopping early if the deck runs out.
+func (e ArchiveTopOfDeck) Resolve(ctx *EffectContext) {
+	for i := 0; i < e.Count; i++ {
+		if !ctx.Resolver.ArchiveTopOfDeck(ctx.Controller) {
+			return
+		}
+	}
+}

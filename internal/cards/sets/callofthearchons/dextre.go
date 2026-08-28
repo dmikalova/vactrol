@@ -11,7 +11,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Traits: Human • Scientist
 //
 //	Play: Dextre captures 1 Æmber.
-//	Destroyed: Put this creature on top of its owner's deck.
+//	Destroyed: Put Dextre on top of its owner's deck.
 var Dextre = card.New(
 	"Dextre",
 	card.House.Logos,

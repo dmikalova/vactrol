@@ -60,10 +60,27 @@ const (
 type CardType string
 
 const (
+	// A creature is a unit you play into your battleline. Once it is ready, it can
+	// reap for Æmber, fight an enemy creature, or use an "Action:" ability.
+	//
+	//rulebook:cardtype Creature
 	Creature CardType = "Creature"
-	Action   CardType = "Action"
+	// An action is a one-shot card: its effect resolves as you play it, and it
+	// then goes straight to your discard pile.
+	//
+	//rulebook:cardtype Action
+	Action CardType = "Action"
+	// An artifact is a permanent card you play alongside your creatures. It stays
+	// in play until something removes it and is typically used for its "Action:"
+	// ability.
+	//
+	//rulebook:cardtype Artifact
 	Artifact CardType = "Artifact"
-	Upgrade  CardType = "Upgrade"
+	// An upgrade attaches to a creature as you play it, changing that creature's
+	// stats or granting it keywords and abilities for as long as it stays attached.
+	//
+	//rulebook:cardtype Upgrade
+	Upgrade CardType = "Upgrade"
 )
 
 // Trait is a flavor/type label printed on a card (e.g. "Giant", "Weapon").
@@ -74,39 +91,78 @@ type Trait string
 type Keyword string
 
 const (
-	// Skirmish: this creature takes no damage when it is used to fight.
+	// A creature with Skirmish takes no damage when it is used to fight: it deals
+	// its power to the enemy creature but takes none back.
+	//
+	//rulebook:keyword Skirmish
 	Skirmish Keyword = "Skirmish"
-	// Poison: any damage dealt to this creature destroys it.
+	// Any amount of damage dealt to a creature with Poison destroys it, however
+	// much power it has left.
+	//
+	//rulebook:keyword Poison
 	Poison Keyword = "Poison"
 	// Elusive: defined for completeness; behavior not yet implemented.
 	Elusive Keyword = "Elusive"
 	// Taunt: defined for completeness; behavior not yet implemented.
 	Taunt Keyword = "Taunt"
+	// A card with Versatile may, once in play, be used (reap/fight/action) as if
+	// it belonged to the active house. It does not relax playing from hand — a
+	// Versatile card is still played only when its own house is the one chosen
+	// this turn.
+	//
+	//rulebook:keyword Versatile
+	Versatile Keyword = "Versatile"
 )
 
 // Trigger identifies when an ability's effect resolves.
 type Trigger int
 
 const (
-	// TriggerAfterPlay fires after a card is played from hand.
+	// A Play ability resolves right after you play the card from your hand. On a
+	// creature or artifact it fires as the card enters play; on an action it is the
+	// card's one-shot effect.
+	//
+	//rulebook:ability Play
 	TriggerAfterPlay Trigger = iota
-	// TriggerAfterReap fires after a creature reaps.
+	// A Reap ability resolves after you use a ready creature to reap. Reaping gains
+	// you 1 Æmber and exhausts the creature; the ability resolves in addition.
+	//
+	//rulebook:ability Reap
 	TriggerAfterReap
-	// TriggerAfterFight fires after a creature fights (once damage is dealt).
+	// A Fight ability resolves after a creature you used to fight has dealt and
+	// taken its combat damage and any resulting destruction has been carried out.
+	//
+	//rulebook:ability Fight
 	TriggerAfterFight
-	// TriggerAction fires when a creature uses its "Action:" ability.
+	// An Action ability is one you resolve by using the card directly, without
+	// reaping or fighting; using it this way exhausts the card.
+	//
+	//rulebook:ability Action
 	TriggerAction
-	// TriggerAfterForgeKey fires after this card's controller forges a key.
+	// This ability resolves after its controller forges a key.
+	//
+	//rulebook:ability After You Forge a Key
 	TriggerAfterForgeKey
-	// TriggerAfterCreatureEnters fires after any creature enters play.
+	// This ability resolves after any creature enters play, including creatures
+	// your opponent plays.
+	//
+	//rulebook:ability After a Creature Enters Play
 	TriggerAfterCreatureEnters
-	// TriggerDestroyed fires when the card is destroyed.
+	// A Destroyed ability resolves as the card is destroyed, before it reaches the
+	// discard pile, so it can still act on the board it is leaving.
+	//
+	//rulebook:ability Destroyed
 	TriggerDestroyed
-	// TriggerBeforeFight fires when a creature is used to fight, before any
+	// A Before Fight ability resolves when a creature is used to fight, before any
 	// combat damage is dealt.
+	//
+	//rulebook:ability Before Fight
 	TriggerBeforeFight
-	// TriggerAfterDestroyedFighting fires on a creature that survives a fight in
-	// which the other combatant was destroyed; the destroyed creature is `it`.
+	// This ability resolves on a creature that survives a fight in which the other
+	// combatant was destroyed; the destroyed creature is the one referred to as
+	// "it".
+	//
+	//rulebook:ability After a Creature Is Destroyed Fighting
 	TriggerAfterDestroyedFighting
 )
 

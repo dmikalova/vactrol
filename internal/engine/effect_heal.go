@@ -2,13 +2,11 @@ package engine
 
 import "fmt"
 
-// Heal removes damage from each creature its Target selects: a fixed Amount of
-// damage, or all of it when Fully is set.
+// Healing takes damage tokens off a creature — a fixed amount, or all of them at
+// once. It can never remove more damage than is on the creature (a creature with
+// no damage is unaffected), and it never changes a creature's power.
 //
-// Healing takes damage tokens off a creature. It can never remove more damage
-// than is on the creature (a creature with no damage is unaffected), and it never
-// changes a creature's power. Set exactly one of Amount or Fully — combining them
-// is rejected when the card is built (see validate), never silently resolved.
+//rulebook:effect Heal
 type Heal struct {
 	Amount int  // damage to remove; must be zero when Fully is set
 	Fully  bool // remove all damage instead of a fixed Amount

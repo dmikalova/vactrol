@@ -45,6 +45,9 @@ type EffectContext struct {
 	Controller int     // the player who controls the ability
 	It         LocalID // the triggering creature, for "it"-style targets
 	HasIt      bool    // whether It is set
+	// ChosenHouse is a house picked by a ChooseHouseThen, read by
+	// Target.OfChosenHouse targets nested inside it.
+	ChosenHouse House
 }
 
 // PlayerFor resolves a relative Player (Controller/Opponent) to an absolute

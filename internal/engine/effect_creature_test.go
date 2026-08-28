@@ -32,3 +32,24 @@ func TestFightVerbNoEnemy(t *testing.T) {
 		t.Error("no fight should have occurred")
 	}
 }
+
+func TestOnChosenCreatureNeighbors(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.AddToBattleline(testCreature("far", 5), 0) // NOT a neighbor of src
+	g.AddToBattleline(testCreature("left", 3), 0)
+	src := g.AddToBattleline(testCreature("src", 3), 0)
+	g.AddToBattleline(testCreature("right", 3), 0)
+	foe := g.AddToBattleline(testCreature("foe", 10), 1)
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	e := OnChosenCreature{Neighbors: true, Verbs: []CreatureVerb{ReadyVerb{}, FightVerb{}}}
+	if e.Text() != "ready and fight with a neighboring creature" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	// The chosen neighbor is `left` (the first neighbor), not the non-neighbor
+	// `far`: the foe takes left's 3 power, not far's 5.
+	if g.Damage(foe) != 3 {
+		t.Errorf("foe damage = %d, want 3 (a neighbor fought, not the far creature)", g.Damage(foe))
+	}
+}

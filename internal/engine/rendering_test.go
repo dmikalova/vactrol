@@ -12,7 +12,7 @@ func TestTriggerPrefixDefault(t *testing.T) {
 
 func TestTargetTextDefault(t *testing.T) {
 	cases := map[TargetKind]string{
-		TargetThisCreature:       "this creature",
+		TargetThisCreature:       SelfName,
 		TargetTriggeringCreature: "it",
 		TargetEachEnemyCreature:  "each enemy creature",
 		TargetKind(99):           "a creature",
@@ -110,5 +110,14 @@ func TestStaticText(t *testing.T) {
 	}
 	if got := staticText(StaticModifier{PowerBonus: 2, HazardousBonus: 2}); got != "This creature gains +2 power and +2 hazardous." {
 		t.Errorf("hazardous staticText = %q", got)
+	}
+	if got := staticText(StaticModifier{Keywords: []Keyword{Skirmish}}); got != "This creature gains skirmish." {
+		t.Errorf("keyword staticText = %q", got)
+	}
+	if got := staticText(StaticModifier{Keywords: []Keyword{Elusive, Skirmish}}); got != "This creature gains elusive and skirmish." {
+		t.Errorf("two-keyword staticText = %q", got)
+	}
+	if got := staticText(StaticModifier{ArmorBonus: 1, Keywords: []Keyword{Taunt}}); got != "This creature gains +1 armor and taunt." {
+		t.Errorf("armor+keyword staticText = %q", got)
 	}
 }

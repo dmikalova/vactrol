@@ -35,6 +35,13 @@ func (FirstChooser) ChooseCreature(_ string, candidates []LocalID) (LocalID, boo
 	return candidates[0], true
 }
 
+// OptionChooser is an optional Chooser capability: choosing one of several
+// labeled options, for "choose one" effects. Choosers that do not implement it
+// default to the first option.
+type OptionChooser interface {
+	ChooseOption(prompt string, options []string) int
+}
+
 // Game bundles the flat GameState with the read-only Catalog and the surrounding
 // engine services (player names, choosers, RNG, log). Cloning a state for MCTS
 // only needs GameState.FastCopy; this wrapper is the live match harness.
@@ -208,6 +215,23 @@ func (g *Game) hazardous(id LocalID) int {
 	return h
 }
 
+// hasKeyword reports whether a creature has a keyword, either printed on it or
+// granted by an attached upgrade.
+func (g *Game) hasKeyword(id LocalID, k Keyword) bool {
+	if g.cat.def(id).hasKeyword(k) {
+		return true
+	}
+	core := &g.State.Cards[id]
+	for i := 0; i < int(core.UpgradeCount); i++ {
+		for _, kw := range g.cat.def(core.Upgrades[i]).Static.Keywords {
+			if kw == k {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Damage returns the damage currently on a creature.
 func (g *Game) Damage(id LocalID) int { return int(g.State.Cards[id].Damage) }
 
@@ -236,6 +260,9 @@ func (g *Game) Battleline(player int) []LocalID {
 
 // Discard returns a copy of the ids in a player's discard pile.
 func (g *Game) Discard(player int) []LocalID { return cloneIDs(g.State.Discard[player].slice()) }
+
+// Archives returns a copy of the ids in a player's archives.
+func (g *Game) Archives(player int) []LocalID { return cloneIDs(g.State.Archives[player].slice()) }
 
 // Artifacts returns a copy of the ids in a player's artifact row.
 func (g *Game) Artifacts(player int) []LocalID { return cloneIDs(g.State.Artifacts[player].slice()) }

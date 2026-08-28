@@ -56,11 +56,17 @@ func (FightVerb) Apply(ctx *EffectContext, target LocalID) {
 // text read naturally, e.g. "Ready and fight with a friendly creature."
 type OnChosenCreature struct {
 	Player Player
-	Verbs  []CreatureVerb
+	// Neighbors restricts the choice to the source creature's battleline
+	// neighbors instead of any friendly/enemy creature ("a neighboring creature").
+	Neighbors bool
+	Verbs     []CreatureVerb
 }
 
 // noun renders the target noun phrase.
 func (e OnChosenCreature) noun() string {
+	if e.Neighbors {
+		return "a neighboring creature"
+	}
 	if e.Player == Opponent {
 		return "an enemy creature"
 	}
@@ -80,6 +86,9 @@ func (e OnChosenCreature) Text() string {
 // Resolve chooses the creature once, then applies each verb to it.
 func (e OnChosenCreature) Resolve(ctx *EffectContext) {
 	candidates := ctx.Resolver.Battleline(ctx.PlayerFor(e.Player))
+	if e.Neighbors {
+		candidates = neighbors(ctx, ctx.Source)
+	}
 	chosen, ok := ctx.Resolver.ChooseCreature(ctx.Controller, "Choose "+e.noun(), candidates)
 	if !ok {
 		ctx.Resolver.Logf("no legal target for %q", e.Text())

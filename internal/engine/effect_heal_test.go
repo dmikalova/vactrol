@@ -11,7 +11,7 @@ func TestHealEffect(t *testing.T) {
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
 
 	partial := Heal{Amount: 2, Target: Target{Kind: TargetThisCreature}}
-	if partial.Text() != "heal 2 damage from this creature" {
+	if partial.Text() != "heal 2 damage from "+SelfName {
 		t.Errorf("partial text = %q", partial.Text())
 	}
 	partial.Resolve(ctx)

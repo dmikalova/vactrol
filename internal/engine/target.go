@@ -35,6 +35,9 @@ const (
 	// TargetChosenEnemyCreature selects a single enemy creature the controller
 	// chooses.
 	TargetChosenEnemyCreature
+	// TargetChosenArtifact selects a single artifact the controller chooses from
+	// all artifacts in play (either player's).
+	TargetChosenArtifact
 )
 
 // Target describes which cards an effect applies to. Kind picks the base set;
@@ -43,6 +46,8 @@ const (
 type Target struct {
 	Kind        TargetKind
 	trait       Trait
+	house       House
+	chosenHouse bool
 	maxPower    int
 	hasMaxPower bool
 	damaged     bool
@@ -54,6 +59,20 @@ type Target struct {
 // Target{Kind: TargetEachCreature}.WithTrait("Scientist").
 func (t Target) WithTrait(trait Trait) Target {
 	t.trait = trait
+	return t
+}
+
+// OfHouse narrows the target to cards of the given house, e.g.
+// Target{Kind: TargetEachCreature}.OfHouse(Mars).
+func (t Target) OfHouse(h House) Target {
+	t.house = h
+	return t
+}
+
+// OfChosenHouse narrows the target to cards of the house picked by an enclosing
+// ChooseHouseThen (read from the effect context at selection time).
+func (t Target) OfChosenHouse() Target {
+	t.chosenHouse = true
 	return t
 }
 
@@ -88,15 +107,21 @@ func (t Target) NotOnFlank() Target {
 // Text renders the target as an English noun phrase, e.g. "each enemy creature",
 // "each Scientist trait creature", or "each creature with power 3 or lower".
 func (t Target) Text() string {
-	if t.Kind == TargetTriggeringCreature {
+	switch t.Kind {
+	case TargetThisCreature:
+		return SelfName
+	case TargetTriggeringCreature:
 		return "it"
 	}
 	noun := "creature"
-	if t.Kind == TargetEachArtifact {
+	if t.Kind == TargetEachArtifact || t.Kind == TargetChosenArtifact {
 		noun = "artifact"
 	}
 	if t.trait != "" {
 		noun = string(t.trait) + " trait " + noun
+	}
+	if t.house != HouseNone {
+		noun = t.house.String() + " " + noun
 	}
 	if t.onFlank {
 		noun = "flank " + noun
@@ -106,8 +131,6 @@ func (t Target) Text() string {
 	}
 	var phrase string
 	switch t.Kind {
-	case TargetThisCreature:
-		phrase = "this " + noun
 	case TargetEachCreature, TargetEachArtifact:
 		phrase = "each " + noun
 	case TargetEachFriendlyCreature:
@@ -118,6 +141,8 @@ func (t Target) Text() string {
 		phrase = "each other friendly " + noun
 	case TargetChosenEnemyCreature:
 		phrase = "an enemy " + noun
+	case TargetChosenArtifact:
+		phrase = "an " + noun
 	default:
 		phrase = "a " + noun
 	}
@@ -126,6 +151,9 @@ func (t Target) Text() string {
 	}
 	if t.notOnFlank {
 		phrase += " that is not on a flank"
+	}
+	if t.chosenHouse {
+		phrase += " of the chosen house"
 	}
 	return phrase
 }
@@ -150,18 +178,24 @@ func (t Target) Select(ctx *EffectContext) []LocalID {
 
 // isChosen reports whether the Kind resolves to a single player-chosen creature.
 func (t Target) isChosen() bool {
-	return t.Kind == TargetChosenCreature || t.Kind == TargetChosenEnemyCreature
+	return t.Kind == TargetChosenCreature || t.Kind == TargetChosenEnemyCreature || t.Kind == TargetChosenArtifact
 }
 
 // filter narrows ids to those matching the target's trait, power, damaged, and
 // flank filters.
 func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
-	if t.trait == "" && !t.hasMaxPower && !t.damaged && !t.onFlank && !t.notOnFlank {
+	if t.trait == "" && t.house == HouseNone && !t.chosenHouse && !t.hasMaxPower && !t.damaged && !t.onFlank && !t.notOnFlank {
 		return ids
 	}
 	out := make([]LocalID, 0, len(ids))
 	for _, id := range ids {
 		if t.trait != "" && !ctx.Resolver.HasTrait(id, t.trait) {
+			continue
+		}
+		if t.house != HouseNone && ctx.Resolver.House(id) != t.house {
+			continue
+		}
+		if t.chosenHouse && ctx.Resolver.House(id) != ctx.ChosenHouse {
 			continue
 		}
 		if t.hasMaxPower && ctx.Resolver.Power(id) > t.maxPower {
@@ -188,6 +222,31 @@ func onFlank(ctx *EffectContext, id LocalID) bool {
 	return len(bl) > 0 && (bl[0] == id || bl[len(bl)-1] == id)
 }
 
+// neighbors returns the creatures immediately adjacent to id in its owner's
+// battleline — its left and right neighbors, when present. A card that is not in
+// a battleline has no neighbors.
+func neighbors(ctx *EffectContext, id LocalID) []LocalID {
+	bl := ctx.Resolver.Battleline(ctx.Resolver.Owner(id))
+	i := -1
+	for j, x := range bl {
+		if x == id {
+			i = j
+			break
+		}
+	}
+	if i < 0 {
+		return nil
+	}
+	out := make([]LocalID, 0, 2)
+	if i > 0 {
+		out = append(out, bl[i-1])
+	}
+	if i < len(bl)-1 {
+		out = append(out, bl[i+1])
+	}
+	return out
+}
+
 // selectBase resolves the unfiltered base set chosen by Kind. Chosen kinds return
 // the pool of candidates; Select applies filters and prompts for the choice.
 func (t Target) selectBase(ctx *EffectContext) []LocalID {
@@ -199,7 +258,7 @@ func (t Target) selectBase(ctx *EffectContext) []LocalID {
 			return []LocalID{ctx.It}
 		}
 		return nil
-	case TargetEachArtifact:
+	case TargetEachArtifact, TargetChosenArtifact:
 		return append(ctx.Resolver.Artifacts(ctx.Controller), ctx.Resolver.Artifacts(1-ctx.Controller)...)
 	case TargetEachCreature, TargetChosenCreature:
 		return append(ctx.Resolver.Battleline(ctx.Controller), ctx.Resolver.Battleline(1-ctx.Controller)...)

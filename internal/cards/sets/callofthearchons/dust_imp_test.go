@@ -7,19 +7,13 @@ import (
 	"github.com/dmikalova/vactrol/internal/engine"
 )
 
-// DustImp gains an extra Æmber from its Reap ability, on top of the +1 for
-// reaping.
+// DustImp gains 2 Æmber for its controller when it is destroyed.
 func TestDustImp(t *testing.T) {
-	g := cardtest.Started(t, engine.Untamed)
+	g := cardtest.Started(t, engine.Dis)
 	id := g.AddToBattleline(DustImp, 0)
 
-	if err := g.Reap(0, id); err != nil {
-		t.Fatalf("Reap: %v", err)
-	}
+	g.DestroyEach(0, []engine.LocalID{id})
 	if g.Aember(0) != 2 {
-		t.Errorf("aember = %d, want 2 (+1 reap, +1 ability)", g.Aember(0))
-	}
-	if !g.Exhausted(id) {
-		t.Error("Dust Imp should be exhausted after reaping")
+		t.Errorf("aember = %d, want 2 (Destroyed: gain 2 Æmber)", g.Aember(0))
 	}
 }
