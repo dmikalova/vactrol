@@ -103,7 +103,7 @@ func TestPurgesDestroyed(t *testing.T) {
 		t.Errorf("purge = %v, want [victim]", got)
 	}
 	if len(g.Discard(1)) != 0 {
-		t.Error("a purged creature must not be in the discard zone")
+		t.Error("a purged creature must not be in the discard pile")
 	}
 	if g.Aember(1) != 0 {
 		t.Error("a purged creature's remaining Destroyed abilities must not resolve")
