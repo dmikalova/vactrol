@@ -75,7 +75,7 @@ Mines, Nepenthe Seed.)
 | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `Return an enemy creature to its owner's hand.`                     | `Put an enemy creature into its owner's hand.`               |
 | `Return Bad Penny to your hand.`                                    | `Put Bad Penny into your hand.`                              |
-| `Return a creature from your discard zone to the top of your deck.` | `Put a creature from your discard zone on top of your deck.` |
+| `Return a creature from your discard pile to the top of your deck.` | `Put a creature from your discard pile on top of your deck.` |
 
 One movement verb (`Put`) covers every destination: `into … hand(s)`,
 `into … archives`, `on top of … deck`. Maps to a `Move{card, zone}` node.
@@ -89,7 +89,7 @@ written with an arrow, not a follow-up sentence.
 
 | Original                                                                                        | Curated                                                                              |
 | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `Purge a creature from a discard zone. If you do, put a +1 power counter on Eater of the Dead.` | `Purge a creature from a discard zone -> give Eater of the Dead a +1 power counter.` |
+| `Purge a creature from a discard pile. If you do, put a +1 power counter on Eater of the Dead.` | `Purge a creature from a discard pile -> give Eater of the Dead a +1 power counter.` |
 | `Destroy a damaged creature. If you do, steal 1 Aember.`                                        | `Destroy a damaged creature -> steal 1 Aember.`                                      |
 | `You may sacrifice another friendly creature. If you do, fully heal Chuff Ape.`                 | `You may destroy another friendly creature -> fully heal Chuff Ape.`                 |
 | `Lose 1 Aember. If you do, you may forge a key at current cost.`                                | `Lose 1 Aember -> forge a key at current cost.`                                      |
@@ -185,7 +185,7 @@ rather than a free-floating static/trigger.
 
 | Original                                                                                                                                                       | Curated                                                                                                                                                       |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `When a creature would enter a discard zone from play, it is purged instead.`                                                                                  | `Each creature gains, "Destroyed: purge this creature."`                                                                                                      |
+| `When a creature would enter a discard pile from play, it is purged instead.`                                                                                  | `Each creature gains, "Destroyed: purge this creature."`                                                                                                      |
 | `Before a creature fights, discard the top card of its controller's deck. If the discarded card is of the active house, exhaust that creature with no effect.` | `Each creature gains, "Before Fight: Discard the top card of its controller's deck. If the discarded card is of the active house, the fight does not occur."` |
 
 Reuses the grant + quoted-ability machinery instead of a bespoke global rule.

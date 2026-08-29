@@ -4,7 +4,7 @@ package engine
 // zone runs out) and shuffling.
 
 // drawOne draws a single card to the player's hand. If the deck is empty, the
-// discard zone is shuffled to form a new deck first (KeyForge recycles the
+// discard pile is shuffled to form a new deck first (KeyForge recycles the
 // discard when the draw zone runs out). It returns false only when both the deck
 // and discard are empty, so nothing can be drawn.
 func (g *Game) drawOne(player int) bool {
@@ -40,6 +40,12 @@ func (g *Game) drawTo(player, n int) {
 			break
 		}
 	}
+}
+
+// canDraw reports whether a player still has a card to draw — one in their deck, or
+// one in their discard pile that would be reshuffled in.
+func (g *Game) canDraw(player int) bool {
+	return g.State.Deck[player].Count > 0 || g.State.Discard[player].Count > 0
 }
 
 // Shuffle randomizes a player's deck using the game's seeded RNG.

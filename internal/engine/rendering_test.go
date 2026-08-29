@@ -2,6 +2,33 @@ package engine
 
 import "testing"
 
+func TestEntersStunnedText(t *testing.T) {
+	def := NewCard("Chuff", Mars, Creature, Common, WithPower(3), WithEntersStunned())
+	want := "Chuff enters play stunned."
+	found := false
+	for _, line := range cardRules(&def) {
+		if line == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("cardRules missing %q; got %v", want, cardRules(&def))
+	}
+}
+
+func TestEntersPlayAbilityText(t *testing.T) {
+	// A Stun effect renders as the "stunned" state word.
+	stun := RenderAbility(Ability{Trigger: TriggerEntersPlay, Effect: Stun{Target: Target{Kind: TargetThisCreature}}})
+	if want := SelfName + " enters play stunned."; stun != want {
+		t.Errorf("enters-play stun = %q, want %q", stun, want)
+	}
+	// An effect without a dedicated enter word falls back to its ordinary text.
+	other := RenderAbility(Ability{Trigger: TriggerEntersPlay, Effect: GainAember{Player: Controller, Amount: 1}})
+	if want := SelfName + " enters play gain 1 Æmber."; other != want {
+		t.Errorf("enters-play fallback = %q, want %q", other, want)
+	}
+}
+
 func TestTriggerPrefixDefault(t *testing.T) {
 	// An unknown trigger renders with no prefix and a capitalized effect.
 	got := RenderAbility(Ability{Trigger: Trigger(99), Effect: GainAember{Player: Controller, Amount: 1}})

@@ -115,6 +115,7 @@ type game struct {
 
 	g          *engine.Game
 	chooser    *webChooser
+	seed       int64             // deal seed; persisted so a hot-reload can rebuild the match
 	deckHouses [2][]engine.House // each player's three deck houses (house choices)
 
 	// dispatch schedules a mutation on the UI goroutine (captured from a Context).
@@ -142,8 +143,12 @@ type game struct {
 	optionLabels   []string
 
 	// zonesPlayer, when >= 0, opens the out-of-play zone viewer (discard, archives,
-	// and purge zones) for that player. -1 keeps the viewer closed.
+	// and purge piles) for that player. -1 keeps the viewer closed.
 	zonesPlayer int
+
+	// dragging is set while a hand card is being dragged, so the board shows as a
+	// drop zone. It is cleared when the drag ends or the card is dropped.
+	dragging bool
 
 	// detailDef, when non-nil, overrides the detail panel to show a card looked up
 	// from the log by name (a printed-text reference, not a live board selection).
@@ -154,30 +159,140 @@ type game struct {
 	status string // transient message (usually an action error)
 }
 
-// OnMount initializes a fresh match on the client. It runs on the UI goroutine
-// once the component is inserted into the page.
+// persistKey names the session-storage slot holding the in-progress match, so a
+// hot-reload of the wasm can resume it instead of dealing a new game.
+const persistKey = "vactrol.match"
+
+// snapshotVersion tags persisted state; bump it when an engine change makes older
+// snapshots invalid so a stale one is flushed instead of restored.
+const snapshotVersion = 1
+
+// snapshot is the persisted match. The seed deterministically rebuilds the
+// catalog and card ids; the flat GameState carries everything mutable. All other
+// state (choosers, deck houses, card index, UI phase) is reconstructed from these.
+type snapshot struct {
+	Version int
+	Seed    int64
+	State   engine.GameState
+}
+
+// OnMount resumes the saved match if there is one, else deals a fresh game. It
+// runs on the UI goroutine once the component is inserted into the page.
 func (g *game) OnMount(ctx app.Context) {
 	g.dispatch = ctx.Dispatch
-	g.newMatch()
+	if !g.resume(ctx) {
+		g.newMatch()
+	}
+	g.save(ctx)
+}
+
+// OnAppUpdate fires when go-app detects a freshly built wasm bundle. It persists
+// the current match and reloads the page onto the new build, which OnMount then
+// resumes — the hot-reload path that keeps the game state.
+func (g *game) OnAppUpdate(ctx app.Context) {
+	g.save(ctx)
+	ctx.Reload()
+}
+
+// save writes the current match to session storage. It runs after every action
+// and before a hot-reload, so a reload resumes from the latest state.
+func (g *game) save(ctx app.Context) {
+	if g.g == nil {
+		return
+	}
+	_ = ctx.SessionStorage().Set(persistKey, snapshot{
+		Version: snapshotVersion,
+		Seed:    g.seed,
+		State:   g.g.State,
+	})
+}
+
+// resume rebuilds the match from a saved snapshot, reporting whether it restored
+// one. A missing, wrong-version, or engine-incompatible snapshot is dropped and
+// resume returns false, so the caller deals a fresh game. Reconstruction from the
+// seed is deterministic, so the rebuilt catalog and card ids match the saved
+// state exactly; any residual mismatch (an older card pool) is caught before use.
+func (g *game) resume(ctx app.Context) (ok bool) {
+	store := ctx.SessionStorage()
+	if !store.Contains(persistKey) {
+		return false
+	}
+	var snap snapshot
+	if err := store.Get(persistKey, &snap); err != nil ||
+		snap.Version != snapshotVersion || snap.Seed == 0 {
+		store.Del(persistKey)
+		return false
+	}
+	// Rebuilding or reading a state from a different engine/card pool can panic on
+	// an out-of-range id; recover and fall back to a fresh deal.
+	defer func() {
+		if recover() != nil {
+			store.Del(persistKey)
+			ok = false
+		}
+	}()
+
+	g.seed = snap.Seed
+	eg, houses := match.New("Player 1", "Player 2", snap.Seed)
+	g.install(eg, houses)
+	g.g.State = snap.State
+	if !g.stateReadsCleanly() {
+		store.Del(persistKey)
+		return false
+	}
+	g.settlePhase()
+	g.clearSelection()
+	g.zonesPlayer = -1
+	g.status = ""
+	return true
+}
+
+// stateReadsCleanly reports whether every card id in the restored state resolves
+// against the rebuilt catalog. A snapshot from a different card pool can hold ids
+// out of range, which panics on lookup; recovering turns that into a clean
+// start-over signal.
+func (g *game) stateReadsCleanly() (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	for p := 0; p < 2; p++ {
+		for _, zone := range [][]engine.LocalID{
+			g.g.Hand(p), g.g.Deck(p), g.g.Battleline(p), g.g.Artifacts(p),
+			g.g.Discard(p), g.g.Archives(p), g.g.Purge(p),
+		} {
+			for _, id := range zone {
+				g.g.Def(id)
+			}
+		}
+	}
+	return true
 }
 
 // newMatch seeds a new game, wires the shared human chooser to both players, and
 // deals random decks. Both sides are driven by the same person (hotseat).
 func (g *game) newMatch() {
-	seed := time.Now().UnixNano()
-	eg, houses := match.New("Player 1", "Player 2", seed)
-	ch := &webChooser{g: g, reply: make(chan chooseReply, 1), optionReply: make(chan int, 1)}
-	eg.SetChooser(0, ch)
-	eg.SetChooser(1, ch)
-	eg.BeginTurn(0) // no Æmber yet, so the opening forge step is a no-op
-
-	g.g = eg
-	g.chooser = ch
-	g.deckHouses = houses
+	g.seed = time.Now().UnixNano()
+	eg, houses := match.New("Player 1", "Player 2", g.seed)
+	g.install(eg, houses)
+	g.g.BeginTurn(0) // no Æmber yet, so the opening forge step is a no-op
 	g.phase = phaseHouse
 	g.clearSelection()
 	g.zonesPlayer = -1
 	g.status = ""
+}
+
+// install wires a freshly built engine game into the component: it attaches the
+// shared human chooser to both players and records the harness and its deck
+// houses. The caller sets the starting phase.
+func (g *game) install(eg *engine.Game, houses [2][]engine.House) {
+	ch := &webChooser{g: g, reply: make(chan chooseReply, 1), optionReply: make(chan int, 1)}
+	eg.SetChooser(0, ch)
+	eg.SetChooser(1, ch)
+	g.g = eg
+	g.chooser = ch
+	g.deckHouses = houses
 	if g.defByName == nil {
 		g.defByName = cardsByName()
 	}
@@ -226,9 +341,10 @@ func (g *game) runAction(ctx app.Context, fn func()) {
 	// the UI stuck on "resolving…" after a chooser.
 	ctx.Async(func() {
 		fn()
-		g.dispatch(func(app.Context) {
+		g.dispatch(func(ctx app.Context) {
 			g.busy = false
 			g.afterAction()
+			g.save(ctx)
 		})
 	})
 }
@@ -237,6 +353,14 @@ func (g *game) runAction(ctx app.Context, fn func()) {
 // the active house may have been cleared (a new turn began), or play continues.
 func (g *game) afterAction() {
 	g.clearSelection()
+	g.settlePhase()
+}
+
+// settlePhase picks the resting interaction phase from the engine state: the game
+// is over, a new turn needs a house, or play continues. Transient phases (picking
+// a flank or a fight target) depend on a live selection, so they are never a
+// resting phase and a resumed match always lands on one of these.
+func (g *game) settlePhase() {
 	switch {
 	case g.g.Winner() >= 0:
 		g.phase = phaseOver
@@ -362,6 +486,43 @@ func (g *game) discard(ctx app.Context, _ app.Event) {
 	g.runAction(ctx, func() { _ = g.g.DiscardFromHand(p, idx) })
 }
 
+// ---- drag and drop (hand → board) ----
+
+// startHandDrag begins dragging a playable hand card. It selects the card so the
+// detail panel and the drop share the same target, and marks a drag in progress
+// so the board shows as a drop zone.
+func (g *game) startHandDrag(ctx app.Context, id engine.LocalID) {
+	if g.busy || g.choosing || g.choosingOption || g.phase != phaseMain {
+		return
+	}
+	g.selectHandID(ctx, id)
+	g.dragging = true
+}
+
+// endHandDrag clears the drag state when the pointer is released, whether or not
+// the card landed on the board.
+func (g *game) endHandDrag(_ app.Context, _ engine.LocalID) {
+	g.dragging = false
+}
+
+// dropOnBoard plays the dragged hand card when it is released over the play area,
+// following the normal flow — a creature still prompts for its flank. A card that
+// cannot be played from hand is left where it is.
+func (g *game) dropOnBoard(ctx app.Context, e app.Event) {
+	e.PreventDefault()
+	if !g.dragging {
+		return
+	}
+	g.dragging = false
+	if g.busy || g.choosing || g.choosingOption || g.phase != phaseMain || g.selKind != selHand {
+		return
+	}
+	if !g.playableFromHand(g.g.Def(g.sel)) {
+		return
+	}
+	g.play(ctx, e)
+}
+
 // ---- creature actions ----
 
 func (g *game) reap(ctx app.Context, _ app.Event) {
@@ -484,4 +645,5 @@ func (g *game) restart(ctx app.Context, _ app.Event) {
 		return
 	}
 	g.newMatch()
+	g.save(ctx)
 }

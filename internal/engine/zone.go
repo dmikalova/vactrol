@@ -8,7 +8,7 @@ type Zone uint8
 const (
 	// zoneUnset is the invalid zero value: an effect must name its zone.
 	zoneUnset Zone = iota
-	// Discard is a player's discard zone.
+	// Discard is a player's discard pile.
 	Discard
 )
 

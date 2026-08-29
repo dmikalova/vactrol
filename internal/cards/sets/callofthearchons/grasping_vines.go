@@ -18,5 +18,5 @@ var GraspingVines = card.New(
 	card.Provenance(card.CotA, 324),
 	card.WithAemberBonus(1),
 	card.WithAbility(
-		card.Trigger.Play, card.ReturnArtifactsToHand{Max: 3}),
+		card.Trigger.Play, card.MoveArtifactsToHand{Max: 3}),
 )

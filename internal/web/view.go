@@ -53,17 +53,24 @@ func (g *game) brandBar() app.UI {
 
 // boardArea renders both battlelines facing each other (opponent on top), each
 // player's score, and the active player's hand. Card rows squeeze to the height
-// available and scroll horizontally when full.
+// available and scroll horizontally when full. The play rows between the two
+// score pills form the drop zone for playing a card dragged from hand.
 func (g *game) boardArea() []app.UI {
 	p := g.active()
 	opp := 1 - p
+	playZone := app.Div().
+		Class(cx("play-zone", ifCls(g.dragging, "play-zone--drop"))).
+		OnDrop(g.dropOnBoard).
+		Body(
+			g.renderRow(g.g.PlayerName(opp)+"'s artifacts", g.g.Artifacts(opp), selOther),
+			g.renderRow(g.g.PlayerName(opp)+"'s creatures", g.g.Battleline(opp), selOther),
+			app.Div().Class("midline"),
+			g.renderRow(g.g.PlayerName(p)+"'s creatures", g.g.Battleline(p), selYourCreature),
+			g.renderRow(g.g.PlayerName(p)+"'s artifacts", g.g.Artifacts(p), selYourArtifact),
+		)
 	return []app.UI{
 		g.scorePill(opp),
-		g.renderRow(g.g.PlayerName(opp)+"'s artifacts", g.g.Artifacts(opp), selOther),
-		g.renderRow(g.g.PlayerName(opp)+"'s creatures", g.g.Battleline(opp), selOther),
-		app.Div().Class("midline"),
-		g.renderRow(g.g.PlayerName(p)+"'s creatures", g.g.Battleline(p), selYourCreature),
-		g.renderRow(g.g.PlayerName(p)+"'s artifacts", g.g.Artifacts(p), selYourArtifact),
+		playZone,
 		g.scorePill(p),
 		g.renderHand(),
 	}
@@ -75,18 +82,24 @@ func (g *game) scorePill(player int) app.UI {
 		fmt.Sprintf("%d Æmber", g.g.Aember(player)),
 		fmt.Sprintf("%d/%d keys", g.g.Keys(player), engine.KeysToWin),
 	}
+	detail := []app.UI{app.Text(strings.Join(parts, " • "))}
 	if active && g.g.State.ActiveHouse != engine.HouseNone {
-		parts = append(parts, "house "+g.g.State.ActiveHouse.String())
+		h := g.g.State.ActiveHouse
+		detail = append(detail,
+			app.Text(" • house "),
+			app.Span().Class(cx("score-house", houseAccent(h))).Text(h.String()),
+		)
 	}
-	zones := fmt.Sprintf("discard %d • archives %d • purge %d",
-		len(g.g.Discard(player)), len(g.g.Archives(player)), len(g.g.Purge(player)))
+	zones := fmt.Sprintf("deck %d • discard %d • archives %d • purge %d",
+		len(g.g.Deck(player)), len(g.g.Discard(player)),
+		len(g.g.Archives(player)), len(g.g.Purge(player)))
 	cls := cx("score-pill", ifCls(active, "score-pill-active"), ifCls(!active, "score-pill-idle"))
 	return app.Div().Class(cls).
 		DataSet("player", strconv.Itoa(player)).
 		OnClick(g.onScorePillClick).
 		Body(
 			app.Span().Class("score-name").Text(g.g.PlayerName(player)),
-			app.Span().Class("score-detail").Text(strings.Join(parts, " • ")),
+			app.Span().Class("score-detail").Body(detail...),
 			app.Span().Class("score-zones").Text(zones),
 		)
 }
@@ -191,7 +204,14 @@ func (g *game) renderHand() app.UI {
 // order (which play/discard index into) is untouched, so selection still maps to
 // the right card.
 func (g *game) sortedHand(p int) []engine.LocalID {
-	ids := append([]engine.LocalID(nil), g.g.Hand(p)...)
+	return g.sortByHouseTypeName(g.g.Hand(p))
+}
+
+// sortByHouseTypeName returns a copy of ids ordered by house, then card type,
+// then name — the stable reading order shared by the hand and the deck view. The
+// deck in particular must not reveal its shuffled order, so it is always sorted.
+func (g *game) sortByHouseTypeName(ids []engine.LocalID) []engine.LocalID {
+	ids = append([]engine.LocalID(nil), ids...)
 	sort.SliceStable(ids, func(i, j int) bool {
 		a, b := g.g.Def(ids[i]), g.g.Def(ids[j])
 		if a.House != b.House {
@@ -208,17 +228,22 @@ func (g *game) sortedHand(p int) []engine.LocalID {
 func (g *game) renderHandCard(id engine.LocalID) app.UI {
 	def := g.g.Def(id)
 	activate, targetable, dimmed := g.cardVisual(id, selHand)
+	draggable := !g.busy && !g.choosing && !g.choosingOption &&
+		g.phase == phaseMain && g.playableFromHand(def)
 	return &cardView{
-		ID:         id,
-		Title:      def.Name,
-		HouseCls:   houseClasses(def.House),
-		Stat:       handStat(def),
-		Rules:      engine.RenderCardRules(def),
-		Kind:       string(def.Type),
-		Selected:   g.hasSel && g.sel == id,
-		Targetable: targetable,
-		Dimmed:     dimmed,
-		OnActivate: activate,
+		ID:          id,
+		Title:       def.Name,
+		HouseCls:    houseClasses(def.House),
+		Stat:        handStat(def),
+		Rules:       engine.RenderCardRules(def),
+		Kind:        string(def.Type),
+		Selected:    g.hasSel && g.sel == id,
+		Targetable:  targetable,
+		Dimmed:      dimmed,
+		OnActivate:  activate,
+		Draggable:   draggable,
+		OnDragStart: g.startHandDrag,
+		OnDragEnd:   g.endHandDrag,
 	}
 }
 
@@ -230,14 +255,7 @@ func (g *game) renderHandCard(id engine.LocalID) app.UI {
 func (g *game) controls() app.UI {
 	// A labeled option prompt (e.g. "take archives?") shows its choices as buttons.
 	if g.choosingOption {
-		return app.Div().Class("controls").Body(
-			app.Div().Class("btn-col").Body(
-				app.Div().Class("prompt").Text(g.optionPrompt),
-				app.Range(g.optionLabels).Slice(func(i int) app.UI {
-					return btn(g.optionLabels[i], g.chooseOptionIdx(i), "btn-primary")
-				}),
-			),
-		)
+		return app.Div().Class("controls").Body(g.optionChooser())
 	}
 	// While an engine chooser waits, the controls become the prompt itself: a
 	// green call to action to click one of the highlighted cards. The choice is
@@ -273,6 +291,44 @@ func (g *game) housePicker() app.UI {
 				OnClick(g.pickHouse(h))
 		}),
 	)
+}
+
+// optionChooser renders a labeled multiple-choice prompt. When every option is a
+// house (a "choose a house" effect such as Blinding Light) it shows colored house
+// buttons like the start-of-turn picker; otherwise plain primary buttons.
+func (g *game) optionChooser() app.UI {
+	if g.houseOptions() {
+		return app.Div().Class("btn-col").Body(
+			app.Div().Class("section-title").Text("Choose a house:"),
+			app.Range(g.optionLabels).Slice(func(i int) app.UI {
+				h, _ := engine.ParseHouse(g.optionLabels[i])
+				return app.Button().
+					Class(cx("house-btn", houseAccent(h))).
+					Text(g.optionLabels[i]).
+					OnClick(g.chooseOptionIdx(i))
+			}),
+		)
+	}
+	return app.Div().Class("btn-col").Body(
+		app.Div().Class("prompt").Text(g.optionPrompt),
+		app.Range(g.optionLabels).Slice(func(i int) app.UI {
+			return btn(g.optionLabels[i], g.chooseOptionIdx(i), "btn-primary")
+		}),
+	)
+}
+
+// houseOptions reports whether every current option label names a house, so the
+// prompt can be shown as the colored house picker.
+func (g *game) houseOptions() bool {
+	if len(g.optionLabels) == 0 {
+		return false
+	}
+	for _, label := range g.optionLabels {
+		if _, ok := engine.ParseHouse(label); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *game) actionBar() app.UI {
@@ -334,7 +390,11 @@ func (g *game) creatureActions() app.UI {
 	items := []app.UI{
 		app.Div().Class("section-title").Text(g.g.Def(g.sel).Name),
 		btn("Reap", g.reap, "btn-primary"),
-		btn("Fight", g.startFight, "btn-primary"),
+	}
+	// Fight is offered only when a legal target exists (e.g. with no enemy
+	// creatures, a ready Valdr can still reap but has nothing to fight).
+	if len(g.g.FightTargets(g.active(), g.sel)) > 0 {
+		items = append(items, btn("Fight", g.startFight, "btn-primary"))
 	}
 	if g.g.HasAction(g.sel) {
 		items = append(items, btn("Action", g.useAction, "btn-primary"))
@@ -458,16 +518,17 @@ func (g *game) overBanner() app.UI {
 	)
 }
 
-// zonesOverlay shows a single player's out-of-play zones — their discard,
-// archives, and purge zones — as read-only card strips, so cards that have left
-// play can be inspected. It is a modal dismissed by the ✕ in the corner or by
-// clicking the backdrop outside the panel.
+// zonesOverlay shows a single player's zones — their deck, discard, archives,
+// and purge piles — as read-only card strips, so cards outside the board can be
+// inspected. It is a modal dismissed by the ✕ in the corner or by clicking the
+// backdrop outside the panel.
 func (g *game) zonesOverlay() app.UI {
 	p := g.zonesPlayer
 	return app.Div().Class("over-backdrop").OnClick(g.closeZones).Body(
 		app.Div().Class("zones-panel").OnClick(g.stopClick).Body(
 			app.Button().Class("zones-close").Text("✕").OnClick(g.closeZones),
-			app.Div().Class("over-title").Text(g.g.PlayerName(p)+"'s out-of-play cards"),
+			app.Div().Class("over-title").Text(g.g.PlayerName(p)+"'s Zones"),
+			g.zoneRow("Deck", g.sortByHouseTypeName(g.g.Deck(p))),
 			g.zoneRow("Discard", g.g.Discard(p)),
 			g.zoneRow("Archives", g.g.Archives(p)),
 			g.zoneRow("Purge", g.g.Purge(p)),

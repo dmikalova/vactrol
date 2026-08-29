@@ -2,14 +2,14 @@ package engine
 
 import "testing"
 
-func TestReturnFromDiscardToHand(t *testing.T) {
+func TestMoveFromDiscardToHand(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	c := g.Register(testCreature("c", 3), 0)
 	g.State.Discard[0].add(c)
 	ctx := &EffectContext{Resolver: g, Controller: 0}
 
-	e := ReturnFromDiscard{Destination: ToHand}
-	if e.Text() != "put a card from your discard zone into your hand" {
+	e := MoveFromDiscard{Destination: ToHand}
+	if e.Text() != "put a card from your discard pile into your hand" {
 		t.Errorf("text = %q", e.Text())
 	}
 	e.Resolve(ctx)
@@ -17,13 +17,44 @@ func TestReturnFromDiscardToHand(t *testing.T) {
 		t.Errorf("hand = %v, want [%d]", g.Hand(0), c)
 	}
 	if len(g.Discard(0)) != 0 {
-		t.Error("the card should have left the discard zone")
+		t.Error("the card should have left the discard pile")
 	}
 
 	// Empty discard: no candidate, so nothing happens.
 	e.Resolve(ctx)
 	if len(g.Hand(0)) != 1 {
 		t.Error("an empty discard should return nothing")
+	}
+}
+
+func TestMoveFromDiscardAll(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	dis1 := g.Register(NewCard("d1", Dis, Creature, Common, WithPower(2)), 0)
+	dis2 := g.Register(NewCard("d2", Dis, Creature, Common, WithPower(2)), 0)
+	sanc := g.Register(NewCard("s", Sanctum, Creature, Common, WithPower(2)), 0)
+	act := g.Register(NewCard("a", Dis, Action, Common), 0) // Dis but not a creature
+	for _, id := range []LocalID{dis1, dis2, sanc, act} {
+		g.State.Discard[0].add(id)
+	}
+	ctx := &EffectContext{Resolver: g, Controller: 0, ChosenHouse: Dis}
+
+	e := MoveFromDiscard{Type: Creature, Destination: ToHand, All: true, OfChosenHouse: true}
+	if e.Text() != "put each creature of the chosen house from your discard pile into your hand" {
+		t.Errorf("text = %q", e.Text())
+	}
+	if e.validate() != nil {
+		t.Errorf("validate(All) = %v, want nil", e.validate())
+	}
+	e.Resolve(ctx)
+
+	// Both Dis creatures return to hand; the Sanctum creature and the Dis action stay.
+	hand := g.Hand(0)
+	if len(hand) != 2 || !containsID(hand, dis1) || !containsID(hand, dis2) {
+		t.Errorf("hand = %v, want [%d %d]", hand, dis1, dis2)
+	}
+	d := g.Discard(0)
+	if len(d) != 2 || !containsID(d, sanc) || !containsID(d, act) {
+		t.Errorf("discard = %v, want [%d %d]", d, sanc, act)
 	}
 }
 
@@ -35,8 +66,8 @@ func TestReturnCreatureFromDiscardToDeck(t *testing.T) {
 	g.State.Discard[0].add(crea)
 	ctx := &EffectContext{Resolver: g, Controller: 0}
 
-	e := ReturnFromDiscard{Type: Creature, Destination: ToTopOfDeck}
-	if e.Text() != "put a creature from your discard zone on top of your deck" {
+	e := MoveFromDiscard{Type: Creature, Destination: ToTopOfDeck}
+	if e.Text() != "put a creature from your discard pile on top of your deck" {
 		t.Errorf("text = %q", e.Text())
 	}
 	e.Resolve(ctx)
@@ -76,7 +107,7 @@ func TestDiscardHand(t *testing.T) {
 		t.Error("the Sanctum creature is the wrong house and should stay")
 	}
 	if !g.State.Discard[1].contains(marsCreature) {
-		t.Error("the Mars creature should be in the discard zone")
+		t.Error("the Mars creature should be in the discard pile")
 	}
 
 	// Discarding a card no longer in the hand is a no-op.

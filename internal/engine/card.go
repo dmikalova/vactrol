@@ -299,6 +299,13 @@ func WithFightRestriction(t Target) CardOption {
 	return func(c *CardDefinition) { c.FightRestriction = t }
 }
 
+// WithEntersStunned makes a creature enter play stunned (Chuff Ape) by giving it
+// an Enters Play ability that stuns itself — an ability the enter-play event
+// fires, so the play path needs no special case for it.
+func WithEntersStunned() CardOption {
+	return WithAbility(TriggerEntersPlay, Stun{Target: Target{Kind: TargetThisCreature}})
+}
+
 // WithAemberBonus sets the number of Æmber pips on the card.
 func WithAemberBonus(n int) CardOption { return func(c *CardDefinition) { c.AemberBonus = n } }
 

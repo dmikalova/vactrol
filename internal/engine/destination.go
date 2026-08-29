@@ -4,7 +4,7 @@ package engine
 // card uses, e.g. "into your hand" or "on top of your deck". The deck has three
 // separate destinations (its top, its bottom, and shuffled in), so "the deck"
 // alone is never a destination; a card always names which. An effect takes one to
-// say where a card goes, e.g. ReturnFromDiscard{Destination: ToTopOfDeck}.
+// say where a card goes, e.g. MoveFromDiscard{Destination: ToTopOfDeck}.
 type Destination uint8
 
 const (
@@ -19,4 +19,6 @@ const (
 	ToBottomOfDeck
 	// ToDeckShuffled shuffles the card into its owner's deck.
 	ToDeckShuffled
+	// ToArchives puts the card into its owner's archives.
+	ToArchives
 )

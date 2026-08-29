@@ -10,8 +10,8 @@ import (
 // and as the first half of a Then ("purge a creature -> give a +1 power counter"),
 // so it reports whether it purged anything.
 type Purge struct {
-	// Zone is the zone the purge pulls from. It has no default: a Purge must name
-	// where it purges from. Only the discard zone is supported today.
+	// Zone is the pile the purge pulls from. It has no default: a Purge must name
+	// where it purges from. Only the discard pile is supported today.
 	Zone Zone
 	// Type restricts the purge to cards of this type; the zero value allows any.
 	Type CardType
@@ -47,51 +47,51 @@ func (e Purge) noun() string {
 	return "card"
 }
 
-// Text renders the effect, e.g. "purge a creature from a discard zone" or "purge
-// up to 2 cards from a discard zone".
+// Text renders the effect, e.g. "purge a creature from a discard pile" or "purge
+// up to 2 cards from a discard pile".
 func (e Purge) Text() string {
 	switch {
 	case e.UpTo:
-		return fmt.Sprintf("purge up to %d %ss from a discard zone", e.count(), e.noun())
+		return fmt.Sprintf("purge up to %d %ss from a discard pile", e.count(), e.noun())
 	case e.count() == 1:
-		return "purge a " + e.noun() + " from a discard zone"
+		return "purge a " + e.noun() + " from a discard pile"
 	default:
-		return fmt.Sprintf("purge %d %ss from a discard zone", e.count(), e.noun())
+		return fmt.Sprintf("purge %d %ss from a discard pile", e.count(), e.noun())
 	}
 }
 
 // Resolve purges the cards, ignoring the report used when Purge gates a Then.
 func (e Purge) Resolve(ctx *EffectContext) { e.resolveGate(ctx) }
 
-// resolveGate purges up to count matching cards from one discard zone the
+// resolveGate purges up to count matching cards from one discard pile the
 // controller picks — the cards one at a time, with a "Done" opt-out when UpTo —
 // and reports whether any card was purged.
 func (e Purge) resolveGate(ctx *EffectContext) bool {
 	matches := func(id LocalID) bool {
 		return e.Type == "" || ctx.Resolver.TypeOf(id) == e.Type
 	}
-	// The discard zones holding at least one matching card.
-	var zones []int
+	// The discard piles holding at least one matching card.
+	var piles []int
 	for _, p := range []int{ctx.Controller, ctx.Opponent()} {
 		for _, id := range ctx.Resolver.Discard(p) {
 			if matches(id) {
-				zones = append(zones, p)
+				piles = append(piles, p)
 				break
 			}
 		}
 	}
-	if len(zones) == 0 {
+	if len(piles) == 0 {
 		return false
 	}
-	zone := zones[0]
-	if len(zones) == 2 {
-		zone = zones[ctx.ChooseOption("Choose a discard zone to purge from",
-			[]string{"your discard zone", "your opponent's discard zone"})]
+	pile := piles[0]
+	if len(piles) == 2 {
+		pile = piles[ctx.ChooseOption("Choose a discard pile to purge from",
+			[]string{"your discard pile", "your opponent's discard pile"})]
 	}
 	purged := 0
 	for i := 0; i < e.count(); i++ {
 		var cands []LocalID
-		for _, id := range ctx.Resolver.Discard(zone) {
+		for _, id := range ctx.Resolver.Discard(pile) {
 			if matches(id) {
 				cands = append(cands, id)
 			}
@@ -110,7 +110,7 @@ func (e Purge) resolveGate(ctx *EffectContext) bool {
 		if choice >= len(cands) {
 			break
 		}
-		ctx.Resolver.PurgeFromDiscard(zone, cands[choice])
+		ctx.Resolver.PurgeFromDiscard(pile, cands[choice])
 		purged++
 	}
 	return purged > 0
@@ -181,7 +181,7 @@ func (e PurgeFromHand) Resolve(ctx *EffectContext) {
 }
 
 // PurgeCreature purges each creature its Target selects from play into its owner's
-// purge zone — the "purge this creature" a card gains (Annihilation Ritual grants
+// purge pile — the "purge this creature" a card gains (Annihilation Ritual grants
 // it to every creature as a Destroyed ability).
 type PurgeCreature struct {
 	Target Target

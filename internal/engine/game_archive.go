@@ -1,6 +1,6 @@
 package engine
 
-// This file holds the archives zone: taking archived cards into hand at the
+// This file holds the archives: taking archived cards into hand at the
 // start of a turn, archiving from hand or the top of the deck, and discarding a
 // whole archive.
 
@@ -44,7 +44,7 @@ func (g *Game) archiveTopOfDeck(player int) bool {
 	return true
 }
 
-// discardArchives moves all of a player's archived cards to their discard zone.
+// discardArchives moves all of a player's archived cards to their discard pile.
 // The active player performs the discard, so they choose the order when it is
 // their own archives but cannot when it is an opponent's — those enter the
 // discard in a random order, since the active player cannot see them.

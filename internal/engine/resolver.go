@@ -31,7 +31,7 @@ type Resolver interface {
 	Artifacts(player int) []LocalID
 	// Hand returns a copy of a player's hand.
 	Hand(player int) []LocalID
-	// Discard returns a copy of a player's discard zone.
+	// Discard returns a copy of a player's discard pile.
 	Discard(player int) []LocalID
 	// Archives returns a copy of a player's archived cards.
 	Archives(player int) []LocalID
@@ -75,38 +75,40 @@ type Resolver interface {
 	DestroyEach(controller int, ids []LocalID)
 	// Draw makes a player draw count cards.
 	Draw(controller, count int)
-	// ReturnToTopOfDeck moves a card from play to the top of its owner's deck.
-	ReturnToTopOfDeck(id LocalID)
-	// ReturnToHand moves a card from play to its owner's hand.
-	ReturnToHand(id LocalID)
-	// ReturnToArchives moves a card from play to its owner's archives.
-	ReturnToArchives(id LocalID)
+	// MoveToTopOfDeck moves a card from play to the top of its owner's deck.
+	MoveToTopOfDeck(id LocalID)
+	// MoveToHand moves a card from play to its owner's hand.
+	MoveToHand(id LocalID)
+	// MoveToArchives moves a card from play to its owner's archives.
+	MoveToArchives(id LocalID)
 	// ArchiveFromHand moves a card from its owner's hand to their archives.
 	ArchiveFromHand(id LocalID)
 	// ArchiveTopOfDeck moves the top card of a player's deck to their archives,
 	// reporting whether a card was available.
 	ArchiveTopOfDeck(player int) bool
-	// DiscardArchives moves all of a player's archived cards to their discard zone.
+	// DiscardArchives moves all of a player's archived cards to their discard pile.
 	// The active player performs the discard, so they choose the order for their own
 	// archives but get a random order for an opponent's (which they cannot see).
 	DiscardArchives(owner int)
-	// PurgeFromDiscard moves a card from a player's discard zone to their purge zone
+	// PurgeFromDiscard moves a card from a player's discard pile to their purge pile
 	// (set aside out of the game).
 	PurgeFromDiscard(owner int, id LocalID)
-	// PurgeFromHand moves a card from a player's hand to their purge zone (set aside
+	// PurgeFromHand moves a card from a player's hand to their purge pile (set aside
 	// out of the game).
 	PurgeFromHand(owner int, id LocalID)
-	// PurgeFromPlay moves a card from play to its owner's purge zone (set aside out
+	// PurgeFromPlay moves a card from play to its owner's purge pile (set aside out
 	// of the game).
 	PurgeFromPlay(id LocalID)
-	// ReturnFromDiscardToHand moves a card from its owner's discard to their hand.
-	ReturnFromDiscardToHand(id LocalID)
-	// ReturnFromDiscardToTopOfDeck moves a card from its owner's discard to the top
+	// MoveFromDiscardToHand moves a card from its owner's discard to their hand.
+	MoveFromDiscardToHand(id LocalID)
+	// MoveFromDiscardToTopOfDeck moves a card from its owner's discard to the top
 	// of their deck.
-	ReturnFromDiscardToTopOfDeck(id LocalID)
+	MoveFromDiscardToTopOfDeck(id LocalID)
 	// DiscardCardFromHand moves a specific card from a player's hand to their discard
 	// zone.
 	DiscardCardFromHand(owner int, id LocalID)
+	// GainChains adds chains to a player, penalizing their future draws.
+	GainChains(controller, amount int)
 	// CannotFightNextTurn bars a player from using creatures to fight throughout
 	// their next turn.
 	CannotFightNextTurn(player int)
@@ -210,14 +212,14 @@ func (g *Game) DestroyEach(controller int, ids []LocalID) { g.destroyEach(contro
 // Draw is the Resolver entry point for the internal draw.
 func (g *Game) Draw(controller, count int) { g.draw(controller, count) }
 
-// ReturnToTopOfDeck is the Resolver entry point for returnToTopOfDeck.
-func (g *Game) ReturnToTopOfDeck(id LocalID) { g.returnToTopOfDeck(id) }
+// MoveToTopOfDeck is the Resolver entry point for moveToTopOfDeck.
+func (g *Game) MoveToTopOfDeck(id LocalID) { g.moveToTopOfDeck(id) }
 
-// ReturnToHand is the Resolver entry point for returnToHand.
-func (g *Game) ReturnToHand(id LocalID) { g.returnToHand(id) }
+// MoveToHand is the Resolver entry point for moveToHand.
+func (g *Game) MoveToHand(id LocalID) { g.moveToHand(id) }
 
-// ReturnToArchives is the Resolver entry point for returnToArchives.
-func (g *Game) ReturnToArchives(id LocalID) { g.returnToArchives(id) }
+// MoveToArchives is the Resolver entry point for moveToArchives.
+func (g *Game) MoveToArchives(id LocalID) { g.moveToArchives(id) }
 
 // ArchiveFromHand moves a card from its owner's hand to their archives.
 func (g *Game) ArchiveFromHand(id LocalID) { g.archiveFromHand(g.owner(id), id) }
@@ -225,13 +227,13 @@ func (g *Game) ArchiveFromHand(id LocalID) { g.archiveFromHand(g.owner(id), id) 
 // ArchiveTopOfDeck moves the top card of a player's deck to their archives.
 func (g *Game) ArchiveTopOfDeck(player int) bool { return g.archiveTopOfDeck(player) }
 
-// DiscardArchives moves all of a player's archived cards to their discard zone.
+// DiscardArchives moves all of a player's archived cards to their discard pile.
 func (g *Game) DiscardArchives(owner int) { g.discardArchives(owner) }
 
-// PurgeFromDiscard moves a card from a player's discard zone to their purge zone.
+// PurgeFromDiscard moves a card from a player's discard pile to their purge pile.
 func (g *Game) PurgeFromDiscard(owner int, id LocalID) { g.purgeFromDiscard(owner, id) }
 
-// PurgeFromHand moves a card from a player's hand to their purge zone.
+// PurgeFromHand moves a card from a player's hand to their purge pile.
 func (g *Game) PurgeFromHand(owner int, id LocalID) { g.purgeFromHand(owner, id) }
 
 // PurgeFromPlay is the Resolver entry point for purgeFromPlay.
@@ -242,21 +244,27 @@ func (g *Game) AddPowerCounter(id LocalID, delta int) {
 	g.State.Cards[id].PowerCounters += int16(delta)
 }
 
-// ReturnFromDiscardToHand moves a card from its owner's discard zone to their hand.
-func (g *Game) ReturnFromDiscardToHand(id LocalID) {
+// MoveFromDiscardToHand moves a card from its owner's discard pile to their hand.
+func (g *Game) MoveFromDiscardToHand(id LocalID) {
 	o := g.owner(id)
 	g.State.Discard[o].remove(id)
 	g.State.Hand[o].add(id)
 	g.logf("%s returns %s from their discard to hand", g.names[o], g.Name(id))
 }
 
-// ReturnFromDiscardToTopOfDeck moves a card from its owner's discard zone to the
+// MoveFromDiscardToTopOfDeck moves a card from its owner's discard pile to the
 // top of their deck.
-func (g *Game) ReturnFromDiscardToTopOfDeck(id LocalID) {
+func (g *Game) MoveFromDiscardToTopOfDeck(id LocalID) {
 	o := g.owner(id)
 	g.State.Discard[o].remove(id)
 	g.State.Deck[o].addFront(id)
 	g.logf("%s puts %s from their discard on top of their deck", g.names[o], g.Name(id))
+}
+
+// GainChains adds chains to a player, which reduce their draws until shed.
+func (g *Game) GainChains(controller, amount int) {
+	g.State.Chains[controller] += amount
+	g.logf("%s gains %d %s (%d total)", g.names[controller], amount, chainNoun(amount), g.State.Chains[controller])
 }
 
 // OrderByChoice is the Resolver entry point for orderByChoice.

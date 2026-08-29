@@ -15,9 +15,9 @@ import (
 //	Power:  4
 //	Traits: Demon
 //
-//	Fight/Reap: Purge a creature from a discard zone -> give Eater of the Dead a +1 power counter.
+//	Fight/Reap: Purge a creature from a discard pile -> give Eater of the Dead a +1 power counter.
 func TestEaterOfTheDead(t *testing.T) {
-	t.Run("reaping purges a creature from a discard zone and grows", func(t *testing.T) {
+	t.Run("reaping purges a creature from a discard pile and grows", func(t *testing.T) {
 		var prey ct.Card
 		h := ct.Play(t, ct.Setup{
 			P1: ct.Side{House: card.House.Dis, InPlay: ct.Cards(EaterOfTheDead)},

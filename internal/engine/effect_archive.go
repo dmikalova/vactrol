@@ -60,7 +60,7 @@ func (e ArchiveTopOfDeck) Resolve(ctx *EffectContext) {
 	}
 }
 
-// DiscardArchives moves all of a player's archived cards into their discard zone.
+// DiscardArchives moves all of a player's archived cards into their discard pile.
 type DiscardArchives struct {
 	Player Player
 }

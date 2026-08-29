@@ -66,7 +66,7 @@ const (
 	//rulebook:cardtype Creature
 	Creature CardType = "Creature"
 	// An action is a one-shot card: its effect resolves as you play it, and it
-	// then goes straight to your discard zone.
+	// then goes straight to your discard pile.
 	//
 	//rulebook:cardtype Action
 	Action CardType = "Action"
@@ -152,7 +152,7 @@ const (
 	//rulebook:ability After a Creature Enters Play
 	TriggerAfterCreatureEnters
 	// A Destroyed ability resolves as the card is destroyed, before it reaches the
-	// discard zone, so it can still act on the board it is leaving.
+	// discard pile, so it can still act on the board it is leaving.
 	//
 	//rulebook:ability Destroyed
 	TriggerDestroyed
@@ -171,6 +171,12 @@ const (
 	//
 	//rulebook:ability After You Play an Artifact
 	TriggerAfterArtifactPlayed
+	// An Enters Play ability resolves on a creature as it enters play, whatever
+	// brought it in — the creature's own reaction to arriving, such as Chuff Ape
+	// entering stunned. It is fired on the entering creature by the enter-play event
+	// (Game.fireCreatureEnters), so a new "as it enters play" behavior is just
+	// another ability rather than a special case in the play path.
+	TriggerEntersPlay
 )
 
 // prefix returns the printed text prefix for a trigger and whether the effect

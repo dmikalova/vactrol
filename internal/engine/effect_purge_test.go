@@ -4,13 +4,13 @@ import "testing"
 
 func TestPurge(t *testing.T) {
 	// Text variants.
-	if got := (Purge{Zone: Discard, Count: 2, UpTo: true}).Text(); got != "purge up to 2 cards from a discard zone" {
+	if got := (Purge{Zone: Discard, Count: 2, UpTo: true}).Text(); got != "purge up to 2 cards from a discard pile" {
 		t.Errorf("up-to text = %q", got)
 	}
-	if got := (Purge{Zone: Discard, Type: Creature}).Text(); got != "purge a creature from a discard zone" {
+	if got := (Purge{Zone: Discard, Type: Creature}).Text(); got != "purge a creature from a discard pile" {
 		t.Errorf("single text = %q", got)
 	}
-	if got := (Purge{Zone: Discard, Count: 2}).Text(); got != "purge 2 cards from a discard zone" {
+	if got := (Purge{Zone: Discard, Count: 2}).Text(); got != "purge 2 cards from a discard pile" {
 		t.Errorf("count text = %q", got)
 	}
 

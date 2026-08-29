@@ -23,7 +23,7 @@ func (g *Game) discardDestroyed(id LocalID) {
 	g.State.Discard[o].add(id)
 }
 
-// purgeFromPlay moves a card from play to its owner's purge zone (set aside out of
+// purgeFromPlay moves a card from play to its owner's purge pile (set aside out of
 // the game), shedding its upgrades, Æmber, and per-match state on the way — the
 // "purge this creature" a Destroyed ability can do (Annihilation Ritual). A card
 // purged as it is destroyed leaves play, so destroyTogether then skips discarding it.
@@ -51,7 +51,7 @@ func (g *Game) leavePlayDestroyed(id LocalID) int {
 	return o
 }
 
-// discardUpgrades moves a card's attached upgrades to their owner's discard zone.
+// discardUpgrades moves a card's attached upgrades to their owner's discard pile.
 // A card that leaves play — destroyed or relocated — sheds its upgrades this way;
 // they do not follow it to hand, deck, or archives.
 func (g *Game) discardUpgrades(id LocalID) {
@@ -66,7 +66,7 @@ func (g *Game) discardUpgrades(id LocalID) {
 // KeyForge timing. Every creature remains in play while all of their Destroyed
 // abilities are collected; the active player orders those abilities, and a creature
 // that leaves play (e.g. Annihilation Ritual purges it) cannot resolve any of its
-// remaining abilities. Then every creature still in play goes to its discard zone.
+// remaining abilities. Then every creature still in play goes to its discard pile.
 func (g *Game) destroyTogether(controller int, ids []LocalID) {
 	for _, id := range ids {
 		g.logf("%s is destroyed", g.Name(id))
@@ -103,9 +103,9 @@ func (g *Game) destroyEach(controller int, ids []LocalID) {
 	g.destroyTogether(controller, ids)
 }
 
-// returnToTopOfDeck removes a card from play and places it on top of its owner's
+// moveToTopOfDeck removes a card from play and places it on top of its owner's
 // deck, clearing the per-match state it accrued while in play.
-func (g *Game) returnToTopOfDeck(id LocalID) {
+func (g *Game) moveToTopOfDeck(id LocalID) {
 	o := g.owner(id)
 	g.State.Battleline[o].remove(id)
 	g.State.Artifacts[o].remove(id)
@@ -115,9 +115,9 @@ func (g *Game) returnToTopOfDeck(id LocalID) {
 	g.logf("%s is put on top of %s's deck", g.Name(id), g.names[o])
 }
 
-// returnToHand removes a card from play and places it into its owner's hand,
+// moveToHand removes a card from play and places it into its owner's hand,
 // clearing the per-match state it accrued while in play.
-func (g *Game) returnToHand(id LocalID) {
+func (g *Game) moveToHand(id LocalID) {
 	o := g.owner(id)
 	g.State.Battleline[o].remove(id)
 	g.State.Artifacts[o].remove(id)
@@ -127,9 +127,9 @@ func (g *Game) returnToHand(id LocalID) {
 	g.logf("%s is returned to %s's hand", g.Name(id), g.names[o])
 }
 
-// returnToArchives removes a card from play and places it into its owner's
+// moveToArchives removes a card from play and places it into its owner's
 // archives, clearing the per-match state it accrued while in play.
-func (g *Game) returnToArchives(id LocalID) {
+func (g *Game) moveToArchives(id LocalID) {
 	o := g.owner(id)
 	g.State.Battleline[o].remove(id)
 	g.State.Artifacts[o].remove(id)

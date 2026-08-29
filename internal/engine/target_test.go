@@ -233,3 +233,35 @@ func containsID(ids []LocalID, id LocalID) bool {
 	}
 	return false
 }
+
+func TestTargetChosenOtherFriendly(t *testing.T) {
+	if got := (Target{Kind: TargetChosenOtherFriendlyCreature}).Text(); got != "another friendly creature" {
+		t.Errorf("text = %q, want %q", got, "another friendly creature")
+	}
+
+	g := NewGame("A", "B", 1)
+	src := g.AddToBattleline(testCreature("src", 3), 0)
+	other := g.AddToBattleline(testCreature("other", 3), 0)
+	g.AddToBattleline(testCreature("enemy", 3), 1)
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	// The source is excluded, leaving one candidate that is auto-selected.
+	if ids := (Target{Kind: TargetChosenOtherFriendlyCreature}).Select(ctx); len(ids) != 1 || ids[0] != other {
+		t.Errorf("chosen-other-friendly = %v, want [%d]", ids, other)
+	}
+
+	// With two other friendly creatures the chooser decides, and may decline.
+	g.AddToBattleline(testCreature("other2", 3), 0)
+	g.SetChooser(0, orderRejectChooser{})
+	if ids := (Target{Kind: TargetChosenOtherFriendlyCreature}).Select(ctx); ids != nil {
+		t.Errorf("chosen-other-friendly (reject) = %v, want nil", ids)
+	}
+
+	// A lone source has no other friendly creatures to choose.
+	g2 := NewGame("A", "B", 1)
+	lone := g2.AddToBattleline(testCreature("lone", 3), 0)
+	ctx2 := &EffectContext{Resolver: g2, Source: lone, Controller: 0}
+	if ids := (Target{Kind: TargetChosenOtherFriendlyCreature}).Select(ctx2); ids != nil {
+		t.Errorf("lone source chosen-other-friendly = %v, want nil", ids)
+	}
+}

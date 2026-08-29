@@ -46,7 +46,7 @@ func (g *Game) PlayArtifact(player, handIndex int) (LocalID, error) {
 }
 
 // PlayAction plays an action card: its Æmber bonus and "Play:" abilities resolve,
-// then it goes to the discard zone.
+// then it goes to the discard pile.
 func (g *Game) PlayAction(player, handIndex int) error {
 	id, err := g.takeFromHand(player, handIndex, Action)
 	if err != nil {
@@ -60,7 +60,7 @@ func (g *Game) PlayAction(player, handIndex int) error {
 }
 
 // DiscardFromHand discards a card of the active house from a player's hand,
-// moving it to the discard zone. It performs no other effect.
+// moving it to the discard pile. It performs no other effect.
 func (g *Game) DiscardFromHand(player, handIndex int) error {
 	if g.State.Winner >= 0 {
 		return ErrGameOver

@@ -107,6 +107,12 @@ type GameState struct {
 	Aember [2]int
 	Keys   [2]int
 
+	// Chains[p] is player p's chain count. Chains penalize a player by reducing how
+	// many cards they draw at the end of their turn — one fewer card for every 6
+	// chains — and a player sheds a single chain on a turn where that reduction
+	// actually blocked a draw (see Game.drawStep).
+	Chains [2]int
+
 	ActivePlayer int
 	ActiveHouse  House
 	Turn         int

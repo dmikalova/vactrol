@@ -21,11 +21,11 @@ func TestEffectValidation(t *testing.T) {
 	if err := (Conditional{Then: GainAember{Player: Controller, Amount: 1}}).validate(); err != nil {
 		t.Errorf("conditional with a valid effect should pass, got %v", err)
 	}
-	if err := validateEffect(ReturnFromDiscard{Destination: ToBottomOfDeck}); err == nil {
-		t.Error("ReturnFromDiscard to an unsupported destination should be rejected")
+	if err := validateEffect(MoveFromDiscard{Destination: ToBottomOfDeck}); err == nil {
+		t.Error("MoveFromDiscard to an unsupported destination should be rejected")
 	}
-	if err := validateEffect(ReturnFromDiscard{Destination: ToTopOfDeck}); err != nil {
-		t.Errorf("ReturnFromDiscard to the top of the deck should pass, got %v", err)
+	if err := validateEffect(MoveFromDiscard{Destination: ToTopOfDeck}); err != nil {
+		t.Errorf("MoveFromDiscard to the top of the deck should pass, got %v", err)
 	}
 	// Purge must name the zone it pulls from.
 	if err := validateEffect(Purge{}); err == nil {

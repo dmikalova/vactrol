@@ -23,5 +23,5 @@ var Dextre = card.New(
 	card.WithAbility(
 		card.Trigger.Play, card.CaptureAember{Amount: 1}),
 	card.WithAbility(
-		card.Trigger.Destroyed, card.ReturnToDeck{Target: card.Target.This}),
+		card.Trigger.Destroyed, card.MoveFromPlay{Target: card.Target.This, Destination: card.To.TopOfDeck}),
 )

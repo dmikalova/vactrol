@@ -3,7 +3,7 @@ package engine
 import "fmt"
 
 // Drawing puts the top card of your deck into your hand. If your deck is empty
-// when you must draw, your discard zone is shuffled to form a new deck first, so
+// when you must draw, your discard pile is shuffled to form a new deck first, so
 // you only fail to draw when both deck and discard are empty.
 //
 //rulebook:effect Draw

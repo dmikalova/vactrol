@@ -107,7 +107,7 @@ The engine gathers every Destroyed ability for all creatures being destroyed,
 then lets the active player order them. A `PurgeCreature{Target: card.Target.This}`
 ability takes its creature out of play immediately, so that creature's remaining
 Destroyed abilities do not resolve and final destruction cleanup does not move it
-to its discard zone. Never implement this kind of card as a global override in
+to its discard pile. Never implement this kind of card as a global override in
 `discardDestroyed` or another leave-play path.
 
 ## KeyForge vernacular

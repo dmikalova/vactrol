@@ -26,7 +26,7 @@ func main() {
 		// server serves it from disk, so editing web/app.css and refreshing the browser
 		// applies changes with the server left running (no restart).
 		Styles:     []string{"/web/app.css"},
-		RawHeaders: []string{boardScript},
+		RawHeaders: []string{boardScript, devReloadScript},
 	})
 
 	const addr = ":8000"
@@ -52,5 +52,38 @@ const boardScript = `<script>
     var log = document.getElementById('gamelog');
     if (log) { log.scrollTop = log.scrollHeight; }
   }).observe(document.documentElement, { childList: true, subtree: true });
+
+  // Drag hand cards onto the board: seed the drag (Firefox needs data on it) and
+  // mark the board a valid drop target so the drop fires. The play logic runs in
+  // Go via the card's OnDragStart and the board's OnDrop.
+  document.addEventListener('dragstart', function (e) {
+    var card = e.target && e.target.closest ? e.target.closest('.card') : null;
+    if (card && card.getAttribute('draggable') === 'true' && e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', '');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  });
+  document.addEventListener('dragover', function (e) {
+    if (!e.target || !e.target.closest) { return; }
+    // Only the play area between the score pills is a drop target — not the score
+    // pills or the hand, so releasing there does not count as playing the card.
+    if (!e.target.closest('.play-zone')) { return; }
+    e.preventDefault();
+    if (e.dataTransfer) { e.dataTransfer.dropEffect = 'move'; }
+  });
+})();
+</script>`
+
+// devReloadScript polls the service worker for a new build. `mage web` restarts
+// the server on every edit, which bumps go-app's version; the poll makes an open
+// tab re-fetch app-worker.js, and go-app fires OnAppUpdate → ctx.Reload() so code
+// and CSS changes appear without a manual refresh. Harmless in a static deploy —
+// with a fixed version, update() finds nothing new.
+const devReloadScript = `<script>
+(function () {
+  if (!('serviceWorker' in navigator)) { return; }
+  setInterval(function () {
+    navigator.serviceWorker.getRegistration().then(function (r) { if (r) { r.update(); } });
+  }, 1500);
 })();
 </script>`

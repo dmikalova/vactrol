@@ -18,7 +18,7 @@ var PhoenixHeart = card.New(
 	card.WithStatic(card.StaticModifier{
 		Granted: []card.Ability{
 			{Trigger: card.Trigger.Destroyed, Effect: card.Sequence{Effects: []card.Effect{
-				card.ReturnToHand{Target: card.Target.This},
+				card.MoveFromPlay{Target: card.Target.This, Destination: card.To.Hand},
 				card.DealDamage{
 					Amount: 3,
 					Target: card.Target.EachCreature,

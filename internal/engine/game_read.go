@@ -130,12 +130,15 @@ func (g *Game) Winner() int { return g.State.Winner }
 // Hand returns a copy of the ids in a player's hand.
 func (g *Game) Hand(player int) []LocalID { return cloneIDs(g.State.Hand[player].slice()) }
 
+// Deck returns a copy of the ids in a player's deck, from top to bottom.
+func (g *Game) Deck(player int) []LocalID { return cloneIDs(g.State.Deck[player].slice()) }
+
 // Battleline returns a copy of the ids on a player's battleline.
 func (g *Game) Battleline(player int) []LocalID {
 	return cloneIDs(g.State.Battleline[player].slice())
 }
 
-// Discard returns a copy of the ids in a player's discard zone.
+// Discard returns a copy of the ids in a player's discard pile.
 func (g *Game) Discard(player int) []LocalID { return cloneIDs(g.State.Discard[player].slice()) }
 
 // Archives returns a copy of the ids in a player's archives.

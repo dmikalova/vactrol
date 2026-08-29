@@ -21,7 +21,7 @@ This document outlines the core concepts of Vactrol, a KeyForge-style card game.
   - Dis: Destruction of creatures on both sides for benefit
   - Ekwidon: Exchange this for that, in their favor
   - Enlightened: Builds a board presence that works up to a big payoff and must be disrupted
-  - Geistoid: Use the discard zone as a resource
+  - Geistoid: Use the discard pile as a resource
   - Logos: Efficiency and card draw
   - Keyraken: Centered on large monsters that everything else revolves around
   - Mars: Insular benefits and synergy, at the expensive of friendly and enemy non-Martians

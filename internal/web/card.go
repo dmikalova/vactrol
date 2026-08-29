@@ -28,6 +28,11 @@ type cardView struct {
 	// go-app compares event handlers by function pointer and would not refresh a
 	// captured id when the board re-renders.
 	OnActivate func(app.Context, engine.LocalID)
+	// Draggable makes the card an HTML5 drag source (a playable hand card). When
+	// set, OnDragStart fires with ID as the drag begins and OnDragEnd as it ends.
+	Draggable   bool
+	OnDragStart func(app.Context, engine.LocalID)
+	OnDragEnd   func(app.Context, engine.LocalID)
 }
 
 // onClick is a stable method (unlike a per-card closure) so go-app keeps it bound
@@ -36,6 +41,18 @@ type cardView struct {
 func (c *cardView) onClick(ctx app.Context, _ app.Event) {
 	if c.OnActivate != nil {
 		c.OnActivate(ctx, c.ID)
+	}
+}
+
+func (c *cardView) onDragStart(ctx app.Context, _ app.Event) {
+	if c.OnDragStart != nil {
+		c.OnDragStart(ctx, c.ID)
+	}
+}
+
+func (c *cardView) onDragEnd(ctx app.Context, _ app.Event) {
+	if c.OnDragEnd != nil {
+		c.OnDragEnd(ctx, c.ID)
 	}
 }
 
@@ -51,6 +68,9 @@ func (c *cardView) Render() app.UI {
 	)
 
 	div := app.Div().Class(cls)
+	if c.Draggable {
+		div = div.Draggable(true).OnDragStart(c.onDragStart).OnDragEnd(c.onDragEnd)
+	}
 	if clickable {
 		div = div.OnClick(c.onClick)
 	}

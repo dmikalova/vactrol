@@ -6,8 +6,11 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/dmikalova/vactrol/internal/hotreload"
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
 )
@@ -25,10 +28,23 @@ func WebWasm() error {
 	)
 }
 
-// Web builds the wasm client and serves it at http://localhost:8000.
+// Web builds the wasm client and serves it at http://localhost:8000, rebuilding
+// and restarting on any Go or CSS change so edits show up live. Each restart
+// bumps go-app's version; the browser polls for it (see cmd/web devReload),
+// reloads, and OnMount resumes the in-progress match. No external watcher needed;
+// press Ctrl-C to stop.
 func Web() error {
-	mg.Deps(WebWasm)
-	return sh.RunV("go", "run", "./cmd/web")
+	bin := filepath.Join(os.TempDir(), "vactrol-web-dev")
+	return hotreload.Serve(hotreload.Config{
+		Build: func() error {
+			if err := WebWasm(); err != nil {
+				return err
+			}
+			return sh.Run("go", "build", "-o", bin, "./cmd/web")
+		},
+		Command:    bin,
+		Extensions: []string{".go", ".css"},
+	})
 }
 
 // Build builds all packages.
@@ -97,6 +113,13 @@ func GenerateComments() error {
 // GenerateRules generates docs/rulebook.md from engine doc comments.
 func GenerateRules() error {
 	return sh.RunV("go", "run", "./cmd/genrules")
+}
+
+// GenerateProvenance rebuilds the provenance card catalogs from the master-vault
+// pack data. It is intentionally NOT part of Gen: it needs the external
+// master-vault-data checkout, so it is run by hand when that source data changes.
+func GenerateProvenance() error {
+	return sh.RunV("go", "run", "./cmd/genprovenance")
 }
 
 // Gen regenerates card comments and the rulebook.

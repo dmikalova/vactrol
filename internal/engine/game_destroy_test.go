@@ -37,7 +37,7 @@ func TestDestroyedRelocationSkipsDiscard(t *testing.T) {
 	g := started(t)
 	// A creature whose "Destroyed:" ability returns it to the top of its deck
 	// leaves play during the event, so it is not also moved to the discard.
-	c := g.AddToBattleline(testCreature("wanderer", 3, WithAbility(TriggerDestroyed, ReturnToDeck{Target: Target{Kind: TargetThisCreature}})), 0)
+	c := g.AddToBattleline(testCreature("wanderer", 3, WithAbility(TriggerDestroyed, MoveFromPlay{Target: Target{Kind: TargetThisCreature}, Destination: ToTopOfDeck})), 0)
 	g.DestroyEach(0, []LocalID{c})
 
 	if g.inPlay(c) {

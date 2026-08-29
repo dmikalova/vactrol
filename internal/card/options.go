@@ -14,6 +14,7 @@ var (
 	WithHazardous        = func(n int) Option { return gameplay(engine.WithHazardous(n)) }
 	WithAttackDamage     = func(ad engine.AttackDamage) Option { return gameplay(engine.WithAttackDamage(ad)) }
 	WithFightRestriction = func(t engine.Target) Option { return gameplay(engine.WithFightRestriction(t)) }
+	WithEntersStunned    = func() Option { return gameplay(engine.WithEntersStunned()) }
 	WithAemberBonus      = func(n int) Option { return gameplay(engine.WithAemberBonus(n)) }
 	WithStatic           = func(m StaticModifier) Option { return gameplay(engine.WithStatic(m)) }
 	WithConstantAbility  = func(c ConstantAbility) Option { return gameplay(engine.WithConstantAbility(c)) }

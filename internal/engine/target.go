@@ -44,6 +44,9 @@ const (
 	// TargetChosenFriendlyCreature selects a single friendly creature the
 	// controller chooses.
 	TargetChosenFriendlyCreature
+	// TargetChosenOtherFriendlyCreature selects a single friendly creature the
+	// controller chooses, excluding the source card ("another friendly creature").
+	TargetChosenOtherFriendlyCreature
 	// TargetChosenArtifact selects a single artifact the controller chooses from
 	// all artifacts in play (either player's).
 	TargetChosenArtifact
@@ -222,6 +225,8 @@ func (t Target) Text() string {
 		phrase = "an enemy " + noun
 	case TargetChosenFriendlyCreature:
 		phrase = "a friendly " + noun
+	case TargetChosenOtherFriendlyCreature:
+		phrase = "another friendly " + noun
 	case TargetChosenArtifact:
 		phrase = "an " + noun
 	default:
@@ -325,7 +330,8 @@ func (exceptMostPowerful) refine(ctx *EffectContext, ids []LocalID) []LocalID {
 // isChosen reports whether the Kind resolves to a single player-chosen creature.
 func (t Target) isChosen() bool {
 	return t.Kind == TargetChosenCreature || t.Kind == TargetChosenEnemyCreature ||
-		t.Kind == TargetChosenFriendlyCreature || t.Kind == TargetChosenArtifact
+		t.Kind == TargetChosenFriendlyCreature || t.Kind == TargetChosenOtherFriendlyCreature ||
+		t.Kind == TargetChosenArtifact
 }
 
 // filter narrows ids to those matching the target's trait, power, damaged, and
@@ -441,7 +447,7 @@ func (t Target) selectBase(ctx *EffectContext) []LocalID {
 		return ctx.Resolver.Battleline(ctx.Controller)
 	case TargetEachEnemyCreature, TargetChosenEnemyCreature:
 		return ctx.Resolver.Battleline(ctx.Opponent())
-	case TargetEachOtherFriendlyCreature:
+	case TargetEachOtherFriendlyCreature, TargetChosenOtherFriendlyCreature:
 		out := make([]LocalID, 0)
 		for _, id := range ctx.Resolver.Battleline(ctx.Controller) {
 			if id != ctx.Source {

@@ -18,7 +18,8 @@ var Barehanded = card.New(
 	card.Provenance(card.CotA, 2),
 	card.WithAemberBonus(1),
 	card.WithAbility(
-		card.Trigger.Play, card.ReturnToDeck{
-			Target: card.Target.EachArtifact,
+		card.Trigger.Play, card.MoveFromPlay{
+			Target:      card.Target.EachArtifact,
+			Destination: card.To.TopOfDeck,
 		}),
 )

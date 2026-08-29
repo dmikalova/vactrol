@@ -176,3 +176,22 @@ func TestEachPlayerLosesAllBut(t *testing.T) {
 		t.Errorf("player 1 aember = %d, want 3 (unchanged)", g.State.Aember[1])
 	}
 }
+
+func TestEachPlayerLosesHalfAember(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.State.Aember[0] = 5 // loses 2 (floor 5/2), keeps 3
+	g.State.Aember[1] = 0 // loses nothing (skip branch)
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+
+	e := EachPlayerLosesHalfAember{}
+	if e.Text() != "each player loses half of their Æmber, rounded down" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if g.State.Aember[0] != 3 {
+		t.Errorf("player 0 aember = %d, want 3", g.State.Aember[0])
+	}
+	if g.State.Aember[1] != 0 {
+		t.Errorf("player 1 aember = %d, want 0", g.State.Aember[1])
+	}
+}

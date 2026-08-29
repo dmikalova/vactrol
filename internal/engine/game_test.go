@@ -4,6 +4,28 @@ import "testing"
 
 // ---- playing cards ----
 
+func TestPlayCreatureEntersStunned(t *testing.T) {
+	g := started(t)
+	g.AddToHand(NewCard("Stunner", Brobnar, Creature, Common, WithPower(3), WithEntersStunned()), 0)
+	id, err := g.PlayCreature(0, handIdx(g, 0, "Stunner"), false)
+	if err != nil {
+		t.Fatalf("PlayCreature: %v", err)
+	}
+	if !g.State.Cards[id].Stunned {
+		t.Error("EntersStunned creature should enter play stunned")
+	}
+
+	// A creature without the flag enters unstunned.
+	g.AddToHand(testCreature("Plain", 3), 0)
+	id2, err := g.PlayCreature(0, handIdx(g, 0, "Plain"), false)
+	if err != nil {
+		t.Fatalf("PlayCreature: %v", err)
+	}
+	if g.State.Cards[id2].Stunned {
+		t.Error("creature without EntersStunned should not enter stunned")
+	}
+}
+
 func TestPlayCreatureFlankLeft(t *testing.T) {
 	g := started(t)
 	first := g.AddToHand(testCreature("first", 2), 0)
@@ -377,6 +399,12 @@ func TestAccessorsAndChooser(t *testing.T) {
 	art := g.AddArtifact(exAutocannon(), 0)
 	if arts := g.Artifacts(0); len(arts) != 1 || arts[0] != art {
 		t.Errorf("Artifacts = %v, want [%d]", arts, art)
+	}
+
+	// Deck accessor returns the deck from top to bottom.
+	top := g.AddToDeck(testCreature("top", 1), 0)
+	if deck := g.Deck(0); len(deck) != 1 || deck[0] != top {
+		t.Errorf("Deck = %v, want [%d]", deck, top)
 	}
 
 	// Nil chooser falls back to the default (FirstChooser).

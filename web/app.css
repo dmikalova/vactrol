@@ -63,6 +63,20 @@ body {
   overflow: hidden;
   padding: 0.75rem;
 }
+/* The play rows between the two score pills; also the drop zone for hand cards.
+   flex-grow 5 keeps each of its rows the same height as the hand row below. */
+.play-zone {
+  display: flex;
+  flex: 5 1 0%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.play-zone--drop {
+  outline: 2px dashed rgb(252 229 102 / 0.5);
+  outline-offset: -4px;
+  border-radius: 0.5rem;
+}
 .sidebar {
   display: flex;
   width: 20rem;
@@ -326,6 +340,10 @@ button:disabled {
 .score-detail {
   color: #8b888f;
 }
+.score-house {
+  color: var(--nm);
+  font-weight: 600;
+}
 .score-zones {
   margin-left: auto;
   color: #6f6c73;
@@ -358,7 +376,7 @@ button:disabled {
   color: #fce566;
 }
 
-/* ---- out-of-play zone viewer (archives + discard zones) ---- */
+/* ---- out-of-play zone viewer (archives + discard piles) ---- */
 .zones-panel {
   position: relative;
   display: flex;
@@ -399,8 +417,13 @@ button:disabled {
   gap: 0.25rem;
 }
 .zone-row .card-strip {
+  flex-wrap: wrap;
+  align-content: flex-start;
+  overflow-x: visible;
+  overflow-y: visible;
+}
+.zone-row .card {
   height: 12rem;
-  flex: none;
 }
 
 /* ---- card face: gradient frame (name banner -> type band) over a dark body ---- */
@@ -518,11 +541,11 @@ button:disabled {
   --edge: #6d3f96;
 }
 .card-sanctum {
-  --nm: #3a5fd9;
+  --nm: #1c6adb;
   --nm-fg: #eaf0ff;
   --tp: #e8b420;
   --tp-fg: #2a1e02;
-  --edge: #3a5fd9;
+  --edge: #1c6adb;
 }
 .card-shadows {
   --nm: #aeb4bb;

@@ -190,3 +190,25 @@ func (e EachPlayerLosesAllBut) Resolve(ctx *EffectContext) {
 		}
 	}
 }
+
+// Some effects halve both pools at once: every player loses half of their Æmber,
+// rounded down, so a player with 5 loses 2 and a player with 4 loses 2. It slows
+// both sides evenly rather than targeting a leader.
+type EachPlayerLosesHalfAember struct{}
+
+// Text renders the effect.
+func (EachPlayerLosesHalfAember) Text() string {
+	return "each player loses half of their Æmber, rounded down"
+}
+
+// Resolve removes half (rounded down) of each player's Æmber.
+func (EachPlayerLosesHalfAember) Resolve(ctx *EffectContext) {
+	for p := 0; p < 2; p++ {
+		lost := ctx.Resolver.Aember(p) / 2
+		if lost == 0 {
+			continue
+		}
+		ctx.Resolver.SetAember(p, ctx.Resolver.Aember(p)-lost)
+		ctx.Resolver.Logf("%s loses %d Æmber", ctx.Resolver.PlayerName(p), lost)
+	}
+}

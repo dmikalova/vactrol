@@ -62,7 +62,7 @@ const (
 	phaseCreatureMenu                  // reap/fight/action menu for one of your creatures
 	phaseChoose                        // engine asked to pick a creature (on the board)
 	phaseTargetFight                   // picking an enemy to fight (on the board)
-	phaseDiscard                       // viewing the discard zone
+	phaseDiscard                       // viewing the discard piles
 	phaseBusy                          // an action is resolving
 	phaseOver                          // game finished
 	phaseConfirmExit                   // confirming leaving the game for the menu
@@ -708,7 +708,7 @@ func (m gameModel) discardView() string {
 	opp := m.g.Discard(1 - m.player)
 	all := append(append([]engine.LocalID{}, you...), opp...)
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Discard zones") + "\n\n")
+	b.WriteString(titleStyle.Render("Discard piles") + "\n\n")
 	if len(all) == 0 {
 		b.WriteString(faintStyle.Render("  (both zones empty)") + "\n\n")
 		b.WriteString(helpStyle.Render("esc/v back"))

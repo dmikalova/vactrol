@@ -4,7 +4,7 @@ package engine
 // creatures they are destroyed simultaneously: every one is tagged for
 // destruction and stays in play while their "Destroyed:" abilities resolve, in an
 // order the controller chooses, so each ability sees the others still present;
-// only then does each creature still in play move to the discard zone, along with
+// only then does each creature still in play move to the discard pile, along with
 // its upgrades. A destroy effect can target every creature or only those matching
 // a filter, such as "each creature with power 3 or lower".
 //

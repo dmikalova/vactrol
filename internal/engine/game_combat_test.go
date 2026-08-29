@@ -299,3 +299,57 @@ func TestFightRestriction(t *testing.T) {
 		t.Fatalf("fight stunned: %v", err)
 	}
 }
+
+func TestFightTargets(t *testing.T) {
+	// Normal: a usable attacker may fight every enemy creature.
+	g := started(t)
+	att := g.AddToBattleline(testCreature("att", 3), 0)
+	a := g.AddToBattleline(testCreature("a", 3), 1)
+	b := g.AddToBattleline(testCreature("b", 3), 1)
+	if got := g.FightTargets(0, att); len(got) != 2 || got[0] != a || got[1] != b {
+		t.Errorf("FightTargets = %v, want [%d %d]", got, a, b)
+	}
+
+	// No enemy creatures: nothing to fight.
+	g2 := started(t)
+	lone := g2.AddToBattleline(testCreature("lone", 3), 0)
+	if got := g2.FightTargets(0, lone); got != nil {
+		t.Errorf("FightTargets with no enemies = %v, want nil", got)
+	}
+
+	// Barred from fighting: no targets even with enemies present.
+	g3 := started(t)
+	barred := g3.AddToBattleline(testCreature("barred", 3), 0)
+	g3.AddToBattleline(testCreature("foe", 3), 1)
+	g3.State.CannotFight[0] = true
+	if got := g3.FightTargets(0, barred); got != nil {
+		t.Errorf("barred FightTargets = %v, want nil", got)
+	}
+
+	// Wrong house without a grant: not usable, so no targets.
+	g4 := started(t) // Brobnar active
+	off := g4.AddToBattleline(NewCard("off", Sanctum, Creature, Common, WithPower(3)), 0)
+	g4.AddToBattleline(testCreature("foe", 3), 1)
+	if got := g4.FightTargets(0, off); got != nil {
+		t.Errorf("off-house FightTargets = %v, want nil", got)
+	}
+
+	// A fight grant forgives the wrong house: the off-house creature may fight.
+	g4.State.MayFightHouse[0] = Sanctum
+	if got := g4.FightTargets(0, off); len(got) != 1 {
+		t.Errorf("granted FightTargets = %v, want one target", got)
+	}
+
+	// A fight restriction narrows the targets to the enemies it allows.
+	g5 := started(t)
+	picky := g5.AddToBattleline(
+		NewCard("picky", Brobnar, Creature, Common, WithPower(7),
+			WithFightRestriction(Target{Kind: TargetEachCreature}.Stunned())), 0)
+	awake := g5.AddToBattleline(testCreature("awake", 3), 1)
+	stunned := g5.AddToBattleline(testCreature("stunned", 3), 1)
+	g5.State.Cards[stunned].Stunned = true
+	got := g5.FightTargets(0, picky)
+	if len(got) != 1 || got[0] != stunned {
+		t.Errorf("restricted FightTargets = %v, want [%d] (only the stunned enemy, not %d)", got, stunned, awake)
+	}
+}

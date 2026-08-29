@@ -153,6 +153,31 @@ func (g *Game) mayFightOutOfHouse(attacker LocalID) bool {
 	return h != HouseNone && g.cat.def(attacker).House == h
 }
 
+// FightTargets returns the enemy creatures the attacker may legally fight right
+// now, mirroring the checks in Fight. It is empty when the player is barred from
+// fighting, the attacker cannot be used (readiness, or wrong house without a
+// fight grant), or no enemy creature satisfies the attacker's fight restriction.
+// A UI offers Fight only when this is non-empty.
+func (g *Game) FightTargets(player int, attacker LocalID) []LocalID {
+	if g.cannotFight(player) {
+		return nil
+	}
+	if err := g.canUse(player, attacker); err != nil &&
+		!(err == ErrWrongHouse && g.mayFightOutOfHouse(attacker)) {
+		return nil
+	}
+	fr := g.cat.def(attacker).FightRestriction
+	var targets []LocalID
+	for _, def := range g.State.Battleline[1-player].slice() {
+		if fr != (Target{}) &&
+			!fr.allows(&EffectContext{Resolver: g, Source: attacker, Controller: player}, def) {
+			continue
+		}
+		targets = append(targets, def)
+	}
+	return targets
+}
+
 // recoverFromStun handles using a stunned creature: it exhausts and clears the
 // stun instead of performing the reap/fight/action. It reports whether the
 // creature was stunned, in which case the caller should stop (the use is spent
@@ -198,9 +223,12 @@ func (g *Game) fireUpgradePlay(host LocalID, up *CardDefinition) {
 	}
 }
 
-// fireCreatureEnters fires "after a creature enters play" abilities on every other
-// in-play card, with the entering creature as the trigger target ("it").
+// fireCreatureEnters is the enter-play event for a creature. It first resolves the
+// entering creature's own "enters play" abilities (Chuff Ape entering stunned),
+// then fires "after a creature enters play" abilities on every other in-play card,
+// with the entering creature as the trigger target ("it").
 func (g *Game) fireCreatureEnters(entered LocalID) {
+	g.triggerAbilities(entered, TriggerEntersPlay, 0, false)
 	for player := 0; player < 2; player++ {
 		for _, id := range g.allInPlay(player) {
 			if id == entered {

@@ -9,12 +9,27 @@ import (
 // RenderAbility renders a single triggered ability to its printed card line,
 // e.g. "After you forge a key, deal 2 damage to each enemy creature."
 func RenderAbility(a Ability) string {
+	if a.Trigger == TriggerEntersPlay {
+		return SelfName + " enters play " + enterStateWord(a.Effect) + "."
+	}
 	prefix, capitalize := a.Trigger.prefix()
 	body := a.Effect.Text()
 	if capitalize {
 		body = capitalizeFirst(body)
 	}
 	return prefix + punctuate(body)
+}
+
+// enterStateWord renders the state an "enters play" ability leaves its creature in,
+// e.g. Stun -> "stunned", so the ability reads "<name> enters play stunned." An
+// effect without a dedicated enter word falls back to its ordinary text.
+func enterStateWord(e Effect) string {
+	switch e.(type) {
+	case Stun:
+		return "stunned"
+	default:
+		return e.Text()
+	}
 }
 
 // punctuate ends an ability body with a period. A body that already ends in a

@@ -5,52 +5,90 @@ import (
 	"strings"
 )
 
-// ReturnFromDiscard returns a card the controller chooses from their own discard
-// zone to a Destination — their hand (the default) or the top of their deck. Type
-// restricts the choice to cards of that type; the zero value allows any card. This
-// is how cards recur from the discard zone, e.g. "Put a creature from your discard
-// zone on top of your deck."
-type ReturnFromDiscard struct {
+// MoveFromDiscard moves a card the controller chooses from their own discard pile
+// to a destination — their hand or the top of their deck. Type restricts the
+// choice to cards of that type; the zero value allows any card. With All it moves
+// every matching card instead of one chosen card (Arise! returning each creature
+// of a house). This is how cards recur from the discard pile, e.g. "Put a creature
+// from your discard pile on top of your deck." The destination is required.
+type MoveFromDiscard struct {
 	// Type restricts the choice to cards of that type; the zero value (an unset
 	// CardType) allows any card.
 	Type CardType
-	// Destination is where the chosen card goes: ToHand (the zero value/default) or
-	// ToTopOfDeck. The other deck destinations are not supported yet.
+	// Destination is where the card goes: ToHand or ToTopOfDeck.
 	Destination Destination
+	// All moves every matching card instead of one chosen card (Arise! returning
+	// each creature of a house).
+	All bool
+	// OfChosenHouse limits the matching cards to the house an enclosing
+	// ChooseHouseThen picked. It applies only with All.
+	OfChosenHouse bool
 }
 
-// noun renders the kind of card the effect returns — the lowercased card type when
+// noun renders the kind of card the effect moves — the lowercased card type when
 // Type is set (e.g. "creature"), otherwise the generic "card".
-func (e ReturnFromDiscard) noun() string {
+func (e MoveFromDiscard) noun() string {
 	if e.Type != "" {
 		return strings.ToLower(string(e.Type))
 	}
 	return "card"
 }
 
-// validate rejects a Destination this effect cannot move a card to; only the hand
-// and the top of the deck are supported.
-func (e ReturnFromDiscard) validate() error {
+// destPhrase renders where the card goes, e.g. "into your hand".
+func (e MoveFromDiscard) destPhrase() string {
+	if e.Destination == ToTopOfDeck {
+		return "on top of your deck"
+	}
+	return "into your hand"
+}
+
+// validate rejects a destination this effect cannot move a card to; only the hand
+// and the top of the deck are supported, and the destination must be named.
+func (e MoveFromDiscard) validate() error {
 	if e.Destination != ToHand && e.Destination != ToTopOfDeck {
-		return fmt.Errorf("ReturnFromDiscard: unsupported destination %d", e.Destination)
+		return fmt.Errorf("MoveFromDiscard: unsupported destination %d", e.Destination)
 	}
 	return nil
 }
 
-// Text renders the effect, e.g. "put a card from your discard zone into your
-// hand" or "put a creature from your discard zone on top of your deck".
-func (e ReturnFromDiscard) Text() string {
-	dest := "into your hand"
-	if e.Destination == ToTopOfDeck {
-		dest = "on top of your deck"
+// Text renders the effect, e.g. "put a card from your discard pile into your hand"
+// or "put each creature of the chosen house from your discard pile into your hand".
+func (e MoveFromDiscard) Text() string {
+	if e.All {
+		what := "each " + e.noun()
+		if e.OfChosenHouse {
+			what += " of the chosen house"
+		}
+		return "put " + what + " from your discard pile " + e.destPhrase()
 	}
-	return "put a " + e.noun() + " from your discard zone " + dest
+	return "put a " + e.noun() + " from your discard pile " + e.destPhrase()
 }
 
-// Resolve lets the controller choose an eligible card from their discard zone and
-// moves it to the chosen destination. It does nothing if there is no candidate or
-// the choice is declined.
-func (e ReturnFromDiscard) Resolve(ctx *EffectContext) {
+// moveTo moves one card from the discard pile to the destination.
+func (e MoveFromDiscard) moveTo(ctx *EffectContext, id LocalID) {
+	if e.Destination == ToTopOfDeck {
+		ctx.Resolver.MoveFromDiscardToTopOfDeck(id)
+	} else {
+		ctx.Resolver.MoveFromDiscardToHand(id)
+	}
+}
+
+// Resolve moves a card from the controller's discard pile to the destination. With
+// All it moves every matching card; otherwise the controller chooses one, and
+// nothing happens if there is no candidate or the choice is declined.
+func (e MoveFromDiscard) Resolve(ctx *EffectContext) {
+	if e.All {
+		for _, id := range ctx.Resolver.Discard(ctx.Controller) {
+			if e.Type != "" && ctx.Resolver.TypeOf(id) != e.Type {
+				continue
+			}
+			if e.OfChosenHouse && ctx.Resolver.House(id) != ctx.ChosenHouse {
+				continue
+			}
+			e.moveTo(ctx, id)
+		}
+		return
+	}
 	discard := ctx.Resolver.Discard(ctx.Controller)
 	candidates := discard
 	if e.Type != "" {
@@ -61,15 +99,11 @@ func (e ReturnFromDiscard) Resolve(ctx *EffectContext) {
 			}
 		}
 	}
-	id, ok := ctx.ChooseCreature("Choose a "+e.noun()+" from your discard zone", candidates)
+	id, ok := ctx.ChooseCreature("Choose a "+e.noun()+" from your discard pile", candidates)
 	if !ok {
 		return
 	}
-	if e.Destination == ToTopOfDeck {
-		ctx.Resolver.ReturnFromDiscardToTopOfDeck(id)
-	} else {
-		ctx.Resolver.ReturnFromDiscardToHand(id)
-	}
+	e.moveTo(ctx, id)
 }
 
 // DiscardHand discards cards from a player's hand: the chosen player's cards,

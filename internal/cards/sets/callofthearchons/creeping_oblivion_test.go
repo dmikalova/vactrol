@@ -13,9 +13,9 @@ import (
 //	Type:   Action
 //	Rarity: Rare
 //
-//	Play: Purge up to 2 cards from a discard zone.
+//	Play: Purge up to 2 cards from a discard pile.
 func TestCreepingOblivion(t *testing.T) {
-	t.Run("purges up to two cards from a discard zone", func(t *testing.T) {
+	t.Run("purges up to two cards from a discard pile", func(t *testing.T) {
 		var a, b ct.Card
 		h := ct.Play(t, ct.Setup{
 			P1: ct.Side{House: card.House.Dis, Hand: ct.Cards(CreepingOblivion)},

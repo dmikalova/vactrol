@@ -76,7 +76,7 @@ goes when played and how it is used.
 ### Action
 
 An action is a one-shot card: its effect resolves as you play it, and it
-then goes straight to your discard zone.
+then goes straight to your discard pile.
 
 ### Artifact
 
@@ -167,7 +167,7 @@ combat damage is dealt.
 ### Destroyed
 
 A Destroyed ability resolves as the card is destroyed, before it reaches the
-discard zone, so it can still act on the board it is leaving.
+discard pile, so it can still act on the board it is leaving.
 
 ### Fight
 
@@ -225,7 +225,7 @@ Destroying a creature removes it from play. When an effect destroys several
 creatures they are destroyed simultaneously: every one is tagged for
 destruction and stays in play while their "Destroyed:" abilities resolve, in an
 order the controller chooses, so each ability sees the others still present;
-only then does each creature still in play move to the discard zone, along with
+only then does each creature still in play move to the discard pile, along with
 its upgrades. A destroy effect can target every creature or only those matching
 a filter, such as "each creature with power 3 or lower".
 
@@ -239,7 +239,7 @@ battle.
 ### Draw
 
 Drawing puts the top card of your deck into your hand. If your deck is empty
-when you must draw, your discard zone is shuffled to form a new deck first, so
+when you must draw, your discard pile is shuffled to form a new deck first, so
 you only fail to draw when both deck and discard are empty.
 
 ### Exalt
@@ -254,6 +254,14 @@ N times places N Æmber.
 Exhausting a creature turns it sideways so it cannot be used again until it
 readies at the end of its controller's turn. It exhausts each creature the
 effect targets.
+
+### Gain Chains
+
+A chain is a penalty a card can inflict on its controller: while a player holds
+chains they draw fewer cards each turn — one fewer for every 6 chains — until the
+chains are shed, one on each turn the reduction blocks a draw. Gaining a chain is
+the cost some strong effects charge, so a card's power is paid for by a slower
+hand refill (see Game.drawStep).
 
 ### Gain Æmber
 
@@ -273,27 +281,31 @@ To lose Æmber, a player returns that many Æmber from their pool to the common
 supply. A pool can never go below zero, so a player told to lose more Æmber
 than they have simply loses all of it.
 
+### May
+
+A "you may" effect is optional: it offers the controller the choice to resolve
+its inner effect or to decline it entirely. It models KeyForge's "You may <do
+X>", where passing is always allowed even when a legal target exists — the
+distinction that keeps Chuff Ape's "you may destroy another friendly creature"
+from ever being forced.
+
+### Move from Play
+
+MoveFromPlay takes each card its Target selects out of play and puts it in a
+destination zone — the top of its owner's deck, their hand, or their archives —
+shedding the per-match state the card built up in play (damage, spent armor,
+Æmber on it, upgrades). The destination is required. Moving a card out of play
+this way is how a "Destroyed:" ability can save its own creature: the creature
+leaves for the named zone as it is destroyed, so it never reaches the discard
+pile. When several cards move to the top of the deck at once the controller
+chooses the order they stack.
+
 ### Reduce Æmber
 
 Some effects cap both pools at once: every player holding more than Keep Æmber
 loses the excess and is left with exactly Keep, while a player already at or
 below Keep is untouched. This reins in a runaway leader without punishing a
 player who has been spending.
-
-### Return to Deck
-
-A card returned to a deck leaves play and loses all the state it built up while
-in play — damage, spent armor, Æmber on it — and becomes the top card of its
-owner's deck, to be drawn again later. When several cards return at once the
-controller chooses the order they are stacked.
-
-### Return to Hand
-
-Like returning to a deck, a card put into its owner's hand leaves play and
-loses the state it built up there — damage, Æmber on it, and so on — and can be
-played again later. This is how a "Destroyed:" ability can save its own
-creature: the creature is moved to hand as it is destroyed, so it never reaches
-the discard zone.
 
 ### Steal Æmber
 

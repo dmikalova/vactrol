@@ -85,8 +85,28 @@ func (g *Game) EndTurn(player int) {
 	g.State.CannotFight[player] = false
 	g.State.MayFightHouse[player] = HouseNone
 	g.clearLasting(player)
-	g.drawTo(player, HandSize)
+	g.drawStep(player)
 	g.logf("%s ends their turn", g.names[player])
+}
+
+// drawStep draws the player back up to their hand size, reduced by their chains,
+// then sheds one chain only if that reduction actually blocked a draw. A player
+// draws one fewer card for every 6 chains they hold (1-6 chains cost one card, 7-12
+// cost two, and so on), and removes a single chain only on a turn where the reduced
+// draw kept them from taking a card they could otherwise have drawn.
+func (g *Game) drawStep(player int) {
+	chains := g.State.Chains[player]
+	target := HandSize - (chains+5)/6
+	if target < 0 {
+		target = 0
+	}
+	g.drawTo(player, target)
+	// The reduction blocked a draw only when it left the player below a full hand
+	// with cards still available to draw.
+	if chains > 0 && int(g.State.Hand[player].Count) < HandSize && g.canDraw(player) {
+		g.State.Chains[player]--
+		g.logf("%s sheds a chain (%d remaining)", g.names[player], g.State.Chains[player])
+	}
 }
 
 // CannotFightNextTurn arms a fight bar on a player for their next turn.

@@ -82,7 +82,7 @@ to seed it. `card.New(...)`:
   `WithAttackDamage(card.AttackDamage{Amount: …, FlankOnly: …})`,
   `WithConstantAbility(card.ConstantAbility{…})`), and nested effects the same
   way. A struct with a single field stays inline (e.g. `card.GainAember{Amount: 1}`,
-  `card.ReturnToHand{Target: card.Target.This}`).
+  `card.Stun{Target: card.Target.This}`).
 - A granted / `WithAbilities` entry keeps its trigger and effect on one line
   (`{Trigger: card.Trigger.Reap, Effect: card.DealDamage{`), mirroring the
   `WithAbility(trigger, effect)` form; if that effect has two or more fields,
