@@ -19,7 +19,7 @@ func (e ReturnToDeck) Text() string {
 
 // Resolve moves each selected card from play to the top of its owner's deck.
 func (e ReturnToDeck) Resolve(ctx *EffectContext) {
-	ids := ctx.Resolver.OrderByChoice(ctx.Controller, "Choose the next card to put on top of the deck", e.Target.Select(ctx))
+	ids := ctx.OrderByChoice("Choose the next card to put on top of the deck", e.Target.Select(ctx))
 	for _, id := range ids {
 		ctx.Resolver.ReturnToTopOfDeck(id)
 	}
@@ -29,7 +29,7 @@ func (e ReturnToDeck) Resolve(ctx *EffectContext) {
 // loses the state it built up there — damage, Æmber on it, and so on — and can be
 // played again later. This is how a "Destroyed:" ability can save its own
 // creature: the creature is moved to hand as it is destroyed, so it never reaches
-// the discard pile.
+// the discard zone.
 //
 //rulebook:effect Return to Hand
 type ReturnToHand struct {
@@ -67,5 +67,37 @@ func (e ReturnToArchives) Text() string {
 func (e ReturnToArchives) Resolve(ctx *EffectContext) {
 	for _, id := range e.Target.Select(ctx) {
 		ctx.Resolver.ReturnToArchives(id)
+	}
+}
+
+// ReturnArtifactsToHand puts up to Max artifacts (either player's) into their
+// owners' hands. The controller chooses them one at a time and may stop early,
+// so it is "up to" rather than exactly Max.
+type ReturnArtifactsToHand struct {
+	Max int
+}
+
+// Text renders the effect, e.g. "put up to 3 artifacts into their owners' hands".
+func (e ReturnArtifactsToHand) Text() string {
+	return fmt.Sprintf("put up to %d artifacts into their owners' hands", e.Max)
+}
+
+// Resolve returns artifacts to hand one at a time, up to Max. Each step offers the
+// artifacts in play plus a "Done" option to stop early; when no artifacts remain,
+// "Done" is the only option and is chosen automatically.
+func (e ReturnArtifactsToHand) Resolve(ctx *EffectContext) {
+	const done = "Done"
+	for i := 0; i < e.Max; i++ {
+		cands := append(ctx.Resolver.Artifacts(ctx.Controller), ctx.Resolver.Artifacts(ctx.Opponent())...)
+		options := make([]string, 0, len(cands)+1)
+		for _, id := range cands {
+			options = append(options, ctx.Resolver.Name(id))
+		}
+		options = append(options, done)
+		choice := ctx.ChooseOption("Choose an artifact to return to hand", options)
+		if choice >= len(cands) {
+			return // "Done" (the last option), or an out-of-range choice
+		}
+		ctx.Resolver.ReturnToHand(cands[choice])
 	}
 }

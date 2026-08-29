@@ -1,0 +1,301 @@
+package engine
+
+import "testing"
+
+// These tests exercise combat: fighting, dealing damage, armor absorption, the
+// Skirmish/Assault/Hazardous keywords, and the fight-timed triggers. The generic
+// example blueprints come from helpers_test.go.
+
+func TestFight(t *testing.T) {
+	g := started(t)
+	attacker := g.AddToBattleline(testCreature("att", 5), 0)
+	defender := g.AddToBattleline(testCreature("def", 4), 1)
+	if err := g.Fight(0, attacker, defender); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if len(g.Battleline(1)) != 0 {
+		t.Error("defender should be destroyed")
+	}
+	if g.Damage(attacker) != 4 {
+		t.Errorf("attacker damage = %d, want 4", g.Damage(attacker))
+	}
+
+	// Invalid target: a friendly creature.
+	friend := g.AddToBattleline(testCreature("friend", 2), 0)
+	att2 := g.AddToBattleline(testCreature("att2", 2), 0)
+	if err := g.Fight(0, att2, friend); err != ErrNoTarget {
+		t.Errorf("err = %v, want ErrNoTarget", err)
+	}
+	// Invalid attacker: exhausted (fails via canUse before target checks).
+	g.State.Cards[att2].Exhausted = true
+	if err := g.Fight(0, att2, friend); err != ErrCardExhausted {
+		t.Errorf("err = %v, want ErrCardExhausted", err)
+	}
+}
+
+func TestGrantFightForHouse(t *testing.T) {
+	g := started(t) // Brobnar is the active house
+	att := g.AddToBattleline(NewCard("wild", Untamed, Creature, Common, WithPower(5)), 0)
+	def := g.AddToBattleline(testCreature("def", 3), 1)
+
+	// Without a grant, an out-of-house creature cannot fight.
+	if err := g.Fight(0, att, def); err != ErrWrongHouse {
+		t.Fatalf("without grant: err = %v, want ErrWrongHouse", err)
+	}
+
+	// The grant lets creatures of that house fight this turn.
+	g.GrantFightForHouse(0, Untamed)
+	if err := g.Fight(0, att, def); err != nil {
+		t.Fatalf("with grant: %v", err)
+	}
+
+	// A creature of another house is still barred.
+	att2 := g.AddToBattleline(NewCard("holy", Sanctum, Creature, Common, WithPower(5)), 0)
+	def2 := g.AddToBattleline(testCreature("def2", 3), 1)
+	if err := g.Fight(0, att2, def2); err != ErrWrongHouse {
+		t.Errorf("other-house attacker: err = %v, want ErrWrongHouse", err)
+	}
+
+	// EndTurn clears the grant.
+	g.EndTurn(0)
+	def3 := g.AddToBattleline(testCreature("def3", 3), 1)
+	if err := g.Fight(0, att, def3); err != ErrWrongHouse {
+		t.Errorf("after EndTurn: err = %v, want ErrWrongHouse (grant cleared)", err)
+	}
+}
+
+func TestFightSimultaneousDestruction(t *testing.T) {
+	g := started(t)
+	// Equal-power creatures with no armor deal lethal damage to each other; both
+	// are judged destroyed from the same combat and removed together.
+	att := g.AddToBattleline(testCreature("att", 3), 0)
+	def := g.AddToBattleline(testCreature("def", 3), 1)
+	if err := g.Fight(0, att, def); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if len(g.Battleline(0)) != 0 || len(g.Battleline(1)) != 0 {
+		t.Errorf("both fighters should be destroyed: friendly=%v enemy=%v", g.Battleline(0), g.Battleline(1))
+	}
+}
+
+func TestAttackDamage(t *testing.T) {
+	valdr := func() CardDefinition {
+		return NewCard("Valdr", Brobnar, Creature, Common, WithPower(6),
+			WithAttackDamage(AttackDamage{Amount: 2, FlankOnly: true}))
+	}
+
+	// A flank bonus adds to the damage dealt when the defender is on a flank.
+	g := started(t)
+	att := g.AddToBattleline(valdr(), 0)
+	flank := g.AddToBattleline(testCreature("flank", 10), 1)
+	if err := g.Fight(0, att, flank); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g.Damage(flank) != 8 { // 6 power + 2 flank bonus
+		t.Errorf("flank defender damage = %d, want 8", g.Damage(flank))
+	}
+
+	// A creature in the middle of the line is not on a flank: no bonus.
+	g2 := started(t)
+	att2 := g2.AddToBattleline(valdr(), 0)
+	g2.AddToBattleline(testCreature("left", 10), 1)
+	middle := g2.AddToBattleline(testCreature("middle", 10), 1)
+	g2.AddToBattleline(testCreature("right", 10), 1)
+	if err := g2.Fight(0, att2, middle); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g2.Damage(middle) != 6 { // 6 power, no bonus
+		t.Errorf("middle defender damage = %d, want 6", g2.Damage(middle))
+	}
+
+	// A Fixed amount replaces power entirely (Ether Spider deals none).
+	g3 := started(t)
+	spider := g3.AddToBattleline(NewCard("spider", Brobnar, Creature, Common, WithPower(7),
+		WithAttackDamage(AttackDamage{Fixed: true, Amount: 0})), 0)
+	foe := g3.AddToBattleline(testCreature("foe", 10), 1)
+	if err := g3.Fight(0, spider, foe); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g3.Damage(foe) != 0 {
+		t.Errorf("fixed-0 attacker dealt %d damage, want 0", g3.Damage(foe))
+	}
+}
+
+func TestBeforeFightTrigger(t *testing.T) {
+	g := started(t)
+	spit := DealDamage{Amount: 1, Target: Target{Kind: TargetEachEnemyCreature}}
+
+	// Defender survives: before-fight damages every enemy, then combat proceeds.
+	att := g.AddToBattleline(testCreature("spitter", 3, WithAbility(TriggerBeforeFight, spit)), 0)
+	weak := g.AddToBattleline(testCreature("weak", 1), 1)
+	tough := g.AddToBattleline(testCreature("tough", 10), 1)
+	if err := g.Fight(0, att, tough); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g.inPlay(weak) {
+		t.Error("before-fight damage should destroy the 1-power enemy")
+	}
+	if g.Damage(tough) != 4 { // 1 before-fight + 3 combat
+		t.Errorf("tough damage = %d, want 4", g.Damage(tough))
+	}
+	if g.inPlay(att) {
+		t.Error("attacker should die to the 10-power defender's retaliation")
+	}
+
+	// Defender destroyed before combat: the attack still happens but deals no
+	// combat damage, so the attacker takes no retaliation.
+	att2 := g.AddToBattleline(testCreature("spitter2", 3, WithAbility(TriggerBeforeFight, spit)), 0)
+	frail := g.AddToBattleline(testCreature("frail", 1), 1)
+	if err := g.Fight(0, att2, frail); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g.inPlay(frail) {
+		t.Error("frail defender should be destroyed before combat")
+	}
+	if g.Damage(att2) != 0 {
+		t.Errorf("attacker took %d damage, want 0 (no combat)", g.Damage(att2))
+	}
+	if !g.State.Cards[att2].Exhausted {
+		t.Error("attacker should be exhausted from attacking")
+	}
+}
+
+func TestAfterDestroyedFightingTrigger(t *testing.T) {
+	gain := GainAember{Player: Controller, Amount: 1}
+
+	// The attacker survives and destroys the defender: its ability fires.
+	g := started(t)
+	hunter := g.AddToBattleline(testCreature("hunter", 6, WithAbility(TriggerAfterDestroyedFighting, gain)), 0)
+	prey := g.AddToBattleline(testCreature("prey", 1), 1)
+	before := g.Aember(0)
+	if err := g.Fight(0, hunter, prey); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g.inPlay(prey) {
+		t.Fatal("prey should be destroyed by the fight")
+	}
+	if g.Aember(0) != before+1 {
+		t.Errorf("survivor aember = %d, want %d", g.Aember(0), before+1)
+	}
+
+	// The defender survives while its Hazardous destroys the attacker: the
+	// defender's ability fires (for its own controller).
+	g2 := started(t)
+	weak := g2.AddToBattleline(testCreature("weak", 1), 0)
+	guard := g2.AddToBattleline(NewCard("guard", Sanctum, Creature, Common,
+		WithPower(6), WithHazardous(5), WithAbility(TriggerAfterDestroyedFighting, gain)), 1)
+	before2 := g2.Aember(1)
+	if err := g2.Fight(0, weak, guard); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if g2.inPlay(weak) {
+		t.Fatal("weak attacker should be destroyed by Hazardous")
+	}
+	if g2.Aember(1) != before2+1 {
+		t.Errorf("defender-controller aember = %d, want %d", g2.Aember(1), before2+1)
+	}
+
+	// Both combatants survive (Skirmish attacker, tougher defender): no ability.
+	g3 := started(t)
+	brawler := g3.AddToBattleline(testCreature("brawler", 3, WithKeywords(Skirmish), WithAbility(TriggerAfterDestroyedFighting, gain)), 0)
+	wall := g3.AddToBattleline(testCreature("wall", 10), 1)
+	before3 := g3.Aember(0)
+	if err := g3.Fight(0, brawler, wall); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if !g3.inPlay(brawler) || !g3.inPlay(wall) {
+		t.Fatal("both combatants should survive")
+	}
+	if g3.Aember(0) != before3 {
+		t.Errorf("no destruction: aember = %d, want %d (unchanged)", g3.Aember(0), before3)
+	}
+}
+
+func TestSkirmishAndArmorAndPoison(t *testing.T) {
+	g := started(t)
+	// Skirmish attacker takes no retaliation.
+	skirm := g.AddToBattleline(testCreature("skirm", 3, WithKeywords(Skirmish)), 0)
+	def := g.AddToBattleline(testCreature("def", 2), 1)
+	if err := g.Fight(0, skirm, def); err != nil {
+		t.Fatal(err)
+	}
+	if g.Damage(skirm) != 0 {
+		t.Errorf("skirmisher took %d damage, want 0", g.Damage(skirm))
+	}
+
+	// Armor absorbs damage (raw application, no destruction).
+	armored := g.AddToBattleline(testCreature("armored", 5, WithArmor(2)), 0)
+	g.DealDamage(0, []DamageTarget{{ID: armored, Amount: 3}}) // 2 absorbed, 1 through
+	if g.Damage(armored) != 1 {
+		t.Errorf("armored damage = %d, want 1", g.Damage(armored))
+	}
+	g.DealDamage(0, []DamageTarget{{ID: armored, Amount: 0}}) // no-op path
+
+	// Poison: dealing any damage destroys the creature as part of the process.
+	poison := g.AddToBattleline(testCreature("poison", 5, WithKeywords(Poison)), 1)
+	g.DealDamage(0, []DamageTarget{{ID: poison, Amount: 1}})
+	if g.inPlay(poison) {
+		t.Error("poisoned creature should be destroyed")
+	}
+}
+
+func TestAssaultAndHazardous(t *testing.T) {
+	// Assault: the attacker deals its Assault to the defender before fight damage.
+	g := NewGame("A", "B", 1)
+	att := g.AddToBattleline(NewCard("assailant", Brobnar, Creature, Common, WithPower(3), WithAssault(2)), 0)
+	def := g.AddToBattleline(testCreature("beefy", 10), 1)
+	g.fight(att, def)
+	if g.Damage(def) != 5 { // 2 assault + 3 fight
+		t.Errorf("assault: defender damage = %d, want 5 (2 assault + 3 fight)", g.Damage(def))
+	}
+
+	// Hazardous can destroy the attacker before any combat damage is exchanged.
+	g2 := NewGame("A", "B", 1)
+	frail := g2.AddToBattleline(testCreature("frail", 4), 0)
+	thorns := g2.AddToBattleline(NewCard("thorns", Untamed, Creature, Common, WithPower(6), WithHazardous(5)), 1)
+	g2.fight(frail, thorns)
+	if g2.inPlay(frail) {
+		t.Error("hazardous should destroy the frail attacker before combat")
+	}
+	if g2.Damage(thorns) != 0 {
+		t.Errorf("no combat should occur; thorns damage = %d, want 0", g2.Damage(thorns))
+	}
+
+	// Assault granted by an upgrade stacks (the accessor sums upgrade bonuses).
+	g3 := NewGame("A", "B", 1)
+	host := g3.AddToBattleline(testCreature("host", 3), 0)
+	wall := g3.AddToBattleline(testCreature("wall", 10), 1)
+	attachUpgrade(g3, host, NewCard("bearway", Untamed, Upgrade, Common, WithStatic(StaticModifier{AssaultBonus: 2})))
+	g3.fight(host, wall)
+	if g3.Damage(wall) != 5 {
+		t.Errorf("upgraded assault: wall damage = %d, want 5", g3.Damage(wall))
+	}
+
+	// Hazardous granted by an upgrade stacks too.
+	g4 := NewGame("A", "B", 1)
+	weak := g4.AddToBattleline(testCreature("weak", 1), 0)
+	guard := g4.AddToBattleline(testCreature("guard", 6), 1)
+	attachUpgrade(g4, guard, NewCard("flames", Dis, Upgrade, Common, WithStatic(StaticModifier{HazardousBonus: 2})))
+	g4.fight(weak, guard)
+	if g4.inPlay(weak) {
+		t.Error("upgraded hazardous should destroy the weak attacker")
+	}
+}
+
+func TestFightRestriction(t *testing.T) {
+	g := started(t) // Brobnar active
+	stunnedOnly := Target{Kind: TargetEachCreature}.Stunned()
+	att := g.AddToBattleline(NewCard("twig", Brobnar, Creature, Common, WithPower(7), WithFightRestriction(stunnedOnly)), 0)
+	def := g.AddToBattleline(testCreature("def", 3), 1)
+
+	// An unstunned enemy is not a legal target.
+	if err := g.Fight(0, att, def); err != ErrNoTarget {
+		t.Errorf("fight unstunned = %v, want ErrNoTarget", err)
+	}
+
+	// Once the enemy is stunned it can be fought.
+	g.State.Cards[def].Stunned = true
+	if err := g.Fight(0, att, def); err != nil {
+		t.Fatalf("fight stunned: %v", err)
+	}
+}

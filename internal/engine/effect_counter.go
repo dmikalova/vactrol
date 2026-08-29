@@ -1,0 +1,23 @@
+package engine
+
+import "fmt"
+
+// Power counters are permanent +1/-1 power tokens placed on a creature: they
+// raise (or lower) its power for as long as it stays in play, and are shed when
+// it leaves. AddPowerCounter places counters on each creature its Target selects.
+type AddPowerCounter struct {
+	Target Target
+	Amount int
+}
+
+// Text renders the effect, e.g. "give Eater of the Dead a +1 power counter".
+func (e AddPowerCounter) Text() string {
+	return fmt.Sprintf("give %s a %+d power counter", e.Target.Text(), e.Amount)
+}
+
+// Resolve places the counters on each selected creature.
+func (e AddPowerCounter) Resolve(ctx *EffectContext) {
+	for _, id := range e.Target.Select(ctx) {
+		ctx.Resolver.AddPowerCounter(id, e.Amount)
+	}
+}

@@ -3,23 +3,37 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Begone!'s first option destroys each Dis creature (the default chooser takes
-// the first option).
+// Begone!
+//
+//	House:  Sanctum
+//	Type:   Action
+//	Rarity: Rare
+//
+//	Play: Choose one:
+//	- Destroy each Dis creature
+//	- Gain 1 Æmber.
 func TestBegone(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	g.AddToBattleline(cardtest.Vanilla("DisGuy", engine.Dis, 3), 1)
-	other := g.AddToBattleline(cardtest.Vanilla("Other", engine.Mars, 3), 1)
-	g.AddToHand(Begone, 0)
+	t.Run("first option destroys each Dis creature", func(t *testing.T) {
+		var disGuy, other ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Sanctum, Hand: ct.Cards(Begone)},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&disGuy, ct.Creature(ct.OfHouse(card.House.Dis), ct.Power(3))),
+					ct.Bind(&other, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+				),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	bl := g.Battleline(1)
-	if len(bl) != 1 || bl[0] != other {
-		t.Errorf("battleline = %v, want only the non-Dis creature [%d]", bl, other)
-	}
+		h.P1.Play(Begone)
+		h.P1.ExpectPrompt("Choose one")
+		h.P1.ClickOption("Dis creature")
+
+		h.Expect(disGuy).At(ct.Discard)
+		h.Expect(other).At(ct.PlayArea)
+	})
 }

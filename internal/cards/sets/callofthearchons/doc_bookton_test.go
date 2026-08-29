@@ -3,24 +3,33 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// DocBookton draws a card when it reaps.
+// Doc Bookton
+//
+//	House:  Logos
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Traits: Human • Scientist
+//
+//	Reap: Draw a card.
 func TestDocBookton(t *testing.T) {
-	g := cardtest.Started(t, engine.Logos)
-	g.AddToDeck(cardtest.Vanilla("d", engine.Logos, 1), 0)
-	id := g.AddToBattleline(DocBookton, 0)
+	t.Run("draws a card when it reaps", func(t *testing.T) {
+		var doc, drawn ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Logos,
+				InPlay: ct.Cards(ct.Bind(&doc, DocBookton)),
+				Deck:   ct.Cards(ct.Bind(&drawn, ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(1)))),
+			},
+		})
 
-	before := len(g.Hand(0))
-	if err := g.Reap(0, id); err != nil {
-		t.Fatalf("Reap: %v", err)
-	}
-	if got := len(g.Hand(0)); got != before+1 {
-		t.Errorf("hand = %d, want %d (drew a card)", got, before+1)
-	}
-	if g.Power(id) != 5 {
-		t.Errorf("power = %d, want 5", g.Power(id))
-	}
+		h.Expect(doc).Power(5)
+		h.P1.Reap(doc)
+
+		h.Expect(drawn).At(ct.Hand) // drew the top card
+	})
 }

@@ -9,9 +9,10 @@ database and playing hotseat games.
 ## Quick start
 
 ```sh
-make run     # launch the terminal UI (card explorer + hotseat game)
-make test    # run the test suite
-make cover   # engine test coverage (kept at 100%)
+mage run      # launch the terminal UI (card explorer + hotseat game)
+mage web      # build the wasm client and serve it at http://localhost:8000
+mage test     # run the test suite
+mage cover    # engine test coverage (kept at 100%)
 ```
 
 Requires Go 1.26+.
@@ -27,14 +28,18 @@ Requires Go 1.26+.
 | `internal/cards/cardtest` | `cardtest` | Shared test harness for the set packages. |
 | `internal/tui` | `tui` | [Bubble Tea](https://github.com/charmbracelet/bubbletea) terminal UI. |
 | `cmd/tui` | `main` | Thin entry point that calls `tui.Run()`. |
+| `internal/match` | `match` | Shared match setup (random decks, house list) used by every frontend. |
+| `internal/web` | `web` | [go-app](https://github.com/maxence-charriere/go-app) WebAssembly client, Monokai-themed. |
+| `cmd/web` | `main` | Serves the web client and, compiled to wasm, runs it in the browser. |
 
-Additional frontends (a web UI, an MCTS bot) are planned as their own `cmd/…`
-binaries and `internal/…` packages built on the same engine.
+The web UI ships today; further frontends (e.g. an MCTS bot) and a lobby server
+are planned as their own `cmd/…` binaries and `internal/…` packages on the same
+engine.
 
 ## Development
 
-`make help` lists the available targets: `run`, `build`, `test`, `cover`, `vet`,
-`fmt`, `tidy`. Card-authoring conventions live in
+`mage -l` lists the available targets: `run`, `web`, `webWasm`, `build`, `test`,
+`cover`, `vet`, `fmt`, `tidy`, `gen`. Card-authoring conventions live in
 [`internal/cards/AGENTS.md`](internal/cards/AGENTS.md).
 
 ## License

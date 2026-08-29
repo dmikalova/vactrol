@@ -17,5 +17,8 @@ var ProtectTheWeak = card.New(
 	card.Rarity.Common,
 	card.Provenance(card.CotA, 265),
 	card.WithAemberBonus(1),
-	card.WithStatic(card.StaticModifier{ArmorBonus: 1, Keywords: card.Keywords(card.Keyword.Taunt)}),
+	card.WithStatic(card.StaticModifier{
+		ArmorBonus: 1,
+		Keywords:   card.Keywords(card.Keyword.Taunt),
+	}),
 )

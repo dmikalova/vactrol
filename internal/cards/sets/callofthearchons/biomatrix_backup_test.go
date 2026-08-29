@@ -3,28 +3,34 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 	"github.com/dmikalova/vactrol/internal/engine"
 )
 
-// Biomatrix Backup relocates its destroyed host into its owner's archives instead
-// of the discard pile; the upgrade itself is discarded.
+// Biomatrix Backup
+//
+//	House:  Mars
+//	Type:   Upgrade
+//	Rarity: Common
+//	Æmber:  1
+//
+//	This creature gains, "Destroyed: Put this creature into its owner's archives."
 func TestBiomatrixBackup(t *testing.T) {
-	g := cardtest.Started(t, engine.Mars)
-	host := g.AddToBattleline(cardtest.Vanilla("Host", engine.Mars, 3), 0)
-	g.AddToHand(BiomatrixBackup, 0)
-	if _, err := g.PlayUpgrade(0, 0); err != nil { // attaches to the friendly host
-		t.Fatalf("PlayUpgrade: %v", err)
-	}
+	t.Run("relocates the destroyed host to its owner's archives", func(t *testing.T) {
+		var host ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Mars,
+				InPlay: ct.Cards(
+					ct.Upgraded(ct.Bind(&host, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))), BiomatrixBackup),
+				),
+			},
+		})
 
-	g.DestroyEach(0, []engine.LocalID{host})
-	if len(g.Battleline(0)) != 0 {
-		t.Error("host should have left the battleline")
-	}
-	if g.State.Archives[0].Count != 1 || g.State.Archives[0].IDs[0] != host {
-		t.Errorf("host should be archived, got %v", g.State.Archives[0].IDs[:g.State.Archives[0].Count])
-	}
-	if len(g.Discard(0)) != 1 { // the upgrade is discarded, the host is not
-		t.Errorf("discard = %v, want just the upgrade", g.Discard(0))
-	}
+		h.Game().DestroyEach(0, []engine.LocalID{host.ID()})
+
+		h.Expect(host).At(ct.Archives)           // host archived instead of discarded
+		h.Expect(BiomatrixBackup).At(ct.Discard) // the upgrade itself is discarded
+	})
 }

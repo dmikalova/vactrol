@@ -8,12 +8,12 @@ type optionPicker struct {
 	idx int
 }
 
-func (o optionPicker) ChooseOption(_ string, _ []string) int { return o.idx }
+func (o optionPicker) ChooseOption(_, _ string, _ []string) int { return o.idx }
 
 func TestChooseOne(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	ctx := &EffectContext{Resolver: g, Controller: 0}
-	e := ChooseOne{Options: []Effect{GainAember{Amount: 1}, GainAember{Amount: 5}}}
+	e := ChooseOne{Options: []Effect{GainAember{Player: Controller, Amount: 1}, GainAember{Player: Controller, Amount: 5}}}
 	if e.Text() != "choose one:\n- Gain 1 Æmber\n- Gain 5 Æmber" {
 		t.Errorf("text = %q", e.Text())
 	}
@@ -44,7 +44,7 @@ func TestChooseOneValidate(t *testing.T) {
 	if validateEffect(bad) == nil {
 		t.Error("ChooseOne with an invalid option should fail validation")
 	}
-	good := ChooseOne{Options: []Effect{GainAember{Amount: 1}, Draw{Amount: 1}}}
+	good := ChooseOne{Options: []Effect{GainAember{Player: Controller, Amount: 1}, Draw{Amount: 1}}}
 	if validateEffect(good) != nil {
 		t.Error("ChooseOne with valid options should pass validation")
 	}
@@ -57,7 +57,7 @@ func TestChooseHouseThen(t *testing.T) {
 	ctx := &EffectContext{Resolver: g, Controller: 0}
 
 	e := ChooseHouseThen{Then: Stun{Target: Target{Kind: TargetEachEnemyCreature}.OfChosenHouse()}}
-	if e.Text() != "choose a house, then stun each enemy creature of the chosen house" {
+	if e.Text() != "choose a house - stun each enemy creature of the chosen house" {
 		t.Errorf("text = %q", e.Text())
 	}
 	// Mars is the fourth house (option index 3).

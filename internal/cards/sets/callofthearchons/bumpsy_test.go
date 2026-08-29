@@ -3,23 +3,29 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Bumpsy makes the opponent lose 1 Æmber when played.
+// Bumpsy
+//
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Traits: Giant
+//
+//	Play: Your opponent loses 1 Æmber.
 func TestBumpsy(t *testing.T) {
-	g := cardtest.Started(t, engine.Brobnar)
-	g.State.Aember[1] = 3
-	g.AddToHand(Bumpsy, 0)
-	id, err := g.PlayCreature(0, 0, false)
-	if err != nil {
-		t.Fatalf("PlayCreature: %v", err)
-	}
-	if g.Power(id) != 5 {
-		t.Errorf("Bumpsy power = %d, want 5", g.Power(id))
-	}
-	if g.Aember(1) != 2 {
-		t.Errorf("opponent Æmber = %d, want 2", g.Aember(1))
-	}
+	t.Run("makes the opponent lose 1 Æmber when played", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Brobnar, Hand: ct.Cards(Bumpsy)},
+			P2: ct.Side{Amber: 3},
+		})
+
+		h.P1.Play(Bumpsy)
+
+		h.Expect(Bumpsy).Power(5)
+		h.P2.ExpectAmber(2)
+	})
 }

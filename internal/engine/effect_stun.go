@@ -1,6 +1,9 @@
 package engine
 
-// Stun and Unstun apply and remove the stun status.
+// Stun and Unstun apply and remove the stun status. Each is a simple "verb the
+// target" effect, so a stun that runs beside another status change on the same
+// target (such as an Exhaust) folds into one phrase in a Sequence (see
+// combinable).
 
 // A stun is a status placed on a creature. A stunned creature must shake off the
 // stun before it can do anything else: the next time it is used to reap, fight,
@@ -13,8 +16,11 @@ type Stun struct {
 	Target Target
 }
 
+func (e Stun) verb() string       { return "stun" }
+func (e Stun) targetText() string { return e.Target.Text() }
+
 // Text renders the effect, e.g. "stun each friendly creature".
-func (e Stun) Text() string { return "stun " + e.Target.Text() }
+func (e Stun) Text() string { return e.verb() + " " + e.targetText() }
 
 // Resolve stuns each selected creature.
 func (e Stun) Resolve(ctx *EffectContext) {
@@ -31,8 +37,11 @@ type Unstun struct {
 	Target Target
 }
 
+func (e Unstun) verb() string       { return "unstun" }
+func (e Unstun) targetText() string { return e.Target.Text() }
+
 // Text renders the effect, e.g. "unstun each friendly creature".
-func (e Unstun) Text() string { return "unstun " + e.Target.Text() }
+func (e Unstun) Text() string { return e.verb() + " " + e.targetText() }
 
 // Resolve clears the stun on each selected creature.
 func (e Unstun) Resolve(ctx *EffectContext) {

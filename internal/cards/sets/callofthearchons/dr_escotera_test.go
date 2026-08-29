@@ -3,20 +3,28 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Dr. Escotera gains 1 Æmber for each key the opponent has forged.
+// Dr. Escotera
+//
+//	House:  Logos
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  4
+//	Traits: Cyborg • Scientist
+//
+//	Play: For each key your opponent has forged, gain 1 Æmber.
 func TestDrEscotera(t *testing.T) {
-	g := cardtest.Started(t, engine.Logos)
-	g.State.Keys[1] = 2 // opponent has forged 2 keys
-	g.AddToHand(DrEscotera, 0)
+	t.Run("gains 1 Æmber for each key the opponent has forged", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Logos, Hand: ct.Cards(DrEscotera)},
+			P2: ct.Side{Keys: 2},
+		})
 
-	if _, err := g.PlayCreature(0, 0, false); err != nil {
-		t.Fatalf("PlayCreature: %v", err)
-	}
-	if g.Aember(0) != 2 {
-		t.Errorf("aember = %d, want 2 (1 per each of 2 forged keys)", g.Aember(0))
-	}
+		h.P1.Play(DrEscotera)
+
+		h.P1.ExpectAmber(2)
+	})
 }

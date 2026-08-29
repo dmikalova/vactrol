@@ -17,6 +17,9 @@ coverage.*
 *.coverprofile
 profile.cov
 
+# Web client WebAssembly build artifact (regenerate with `mage webWasm`)
+web/app.wasm
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

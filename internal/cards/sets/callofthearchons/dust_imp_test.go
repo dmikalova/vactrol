@@ -3,17 +3,29 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 	"github.com/dmikalova/vactrol/internal/engine"
 )
 
-// DustImp gains 2 Æmber for its controller when it is destroyed.
+// Dust Imp
+//
+//	House:  Dis
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  2
+//	Traits: Imp
+//
+//	Destroyed: Gain 2 Æmber.
 func TestDustImp(t *testing.T) {
-	g := cardtest.Started(t, engine.Dis)
-	id := g.AddToBattleline(DustImp, 0)
+	t.Run("gains 2 Æmber for its controller when it is destroyed", func(t *testing.T) {
+		var imp ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Dis, InPlay: ct.Cards(ct.Bind(&imp, DustImp))},
+		})
 
-	g.DestroyEach(0, []engine.LocalID{id})
-	if g.Aember(0) != 2 {
-		t.Errorf("aember = %d, want 2 (Destroyed: gain 2 Æmber)", g.Aember(0))
-	}
+		h.Game().DestroyEach(0, []engine.LocalID{imp.ID()})
+
+		h.P1.ExpectAmber(2)
+	})
 }

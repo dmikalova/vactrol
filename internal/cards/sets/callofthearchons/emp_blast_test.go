@@ -3,33 +3,38 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// EMP Blast stuns each Mars creature and each Robot, and destroys every artifact.
+// EMP Blast
+//
+//	House:  Mars
+//	Type:   Action
+//	Rarity: Uncommon
+//	Æmber:  1
+//
+//	Play: Stun each Mars creature, and stun each Robot trait creature, and destroy each artifact.
 func TestEMPBlast(t *testing.T) {
-	g := cardtest.Started(t, engine.Mars)
-	marsGuy := g.AddToBattleline(cardtest.Vanilla("MarsGuy", engine.Mars, 3), 1)
-	robot := g.AddToBattleline(engine.NewCard("Bot", engine.Logos, engine.Creature, engine.Common,
-		engine.WithPower(3), engine.WithTraits("Robot")), 1)
-	other := g.AddToBattleline(cardtest.Vanilla("Other", engine.Sanctum, 3), 1)
-	g.AddArtifact(Cannon, 1)
-	g.AddToHand(EMPBlast, 0)
+	t.Run("stuns each Mars and Robot creature and destroys each artifact", func(t *testing.T) {
+		var marsGuy, robot, other ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Mars, Hand: ct.Cards(EMPBlast)},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&marsGuy, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+					ct.Bind(&robot, ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(3), ct.Traits("Robot"))),
+					ct.Bind(&other, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(3))),
+					Cannon,
+				),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if !g.State.Cards[marsGuy].Stunned {
-		t.Error("Mars creature should be stunned")
-	}
-	if !g.State.Cards[robot].Stunned {
-		t.Error("Robot creature should be stunned")
-	}
-	if g.State.Cards[other].Stunned {
-		t.Error("a non-Mars, non-Robot creature should not be stunned")
-	}
-	if len(g.Artifacts(1)) != 0 {
-		t.Error("each artifact should be destroyed")
-	}
+		h.P1.Play(EMPBlast)
+
+		h.Expect(marsGuy).Stunned(true)
+		h.Expect(robot).Stunned(true)
+		h.Expect(other).Stunned(false)
+		h.Expect(Cannon).At(ct.Discard) // each artifact is destroyed
+	})
 }

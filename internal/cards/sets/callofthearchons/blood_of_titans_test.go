@@ -3,26 +3,30 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Blood of Titans is an upgrade that grants its host creature +5 power while
-// attached.
+// Blood of Titans
+//
+//	House:  Brobnar
+//	Type:   Upgrade
+//	Rarity: Uncommon
+//	Æmber:  1
+//
+//	This creature gains +5 power.
 func TestBloodOfTitans(t *testing.T) {
-	g := cardtest.Started(t, engine.Brobnar)
-	host := g.AddToBattleline(cardtest.Vanilla("Host", engine.Brobnar, 4), 0)
-	before := g.Power(host)
+	t.Run("grants its host +5 power while attached", func(t *testing.T) {
+		var host ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Brobnar,
+				InPlay: ct.Cards(
+					ct.Upgraded(ct.Bind(&host, ct.Creature(ct.OfHouse(card.House.Brobnar), ct.Power(4))), BloodOfTitans),
+				),
+			},
+		})
 
-	g.AddToHand(BloodOfTitans, 0)
-	upHost, err := g.PlayUpgrade(0, 0)
-	if err != nil {
-		t.Fatalf("PlayUpgrade: %v", err)
-	}
-	if upHost != host {
-		t.Fatalf("upgrade attached to %v, want host %v", upHost, host)
-	}
-	if got := g.Power(host); got != before+5 {
-		t.Errorf("host power = %d, want %d", got, before+5)
-	}
+		h.Expect(host).Power(9) // 4 base + 5
+	})
 }

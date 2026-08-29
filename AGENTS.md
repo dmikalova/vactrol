@@ -3,6 +3,14 @@
 Repo-wide guidance for agents. See `internal/cards/AGENTS.md` for
 card-authoring specifics.
 
+## Multiple agents may be running
+
+More than one agent can be working in this repo at the same time. If the build,
+vet, or tests fail because of a change you did **not** make — an unfamiliar file,
+a symbol you never touched, an in-progress edit that doesn't yet compile — assume
+another agent is mid-change. Wait a little and try again rather than "fixing" or
+reverting their work. Only act on failures that stem from your own changes.
+
 ## Interpreting requests
 
 Read every request through the lens of **idiomatic, maintainable, composable,
@@ -19,3 +27,118 @@ generalizing a type, effect, or seam — prefer the refactor. A good fit for the
 new feature (and the features that will follow it) matters more than preserving
 today's shape. Keep such refactors focused, keep everything green (including 100%
 `internal/engine` coverage), and leave the design better than you found it.
+
+## File organization
+
+`internal/engine` splits by responsibility, and the filename says which:
+
+- `game.go` + `game_*.go` — the `Game` runtime: methods on `*Game`, grouped by
+  area (`game_turn.go`, `game_play.go`, `game_read.go`, `game_abilities.go`,
+  `game_combat.go`, `game_destroy.go`, …). A new `Game` method goes in the
+  matching `game_*.go`.
+- `effect.go` + `effect_*.go` — the effect AST, one file per mechanic
+  (`effect_aember.go`, `effect_damage.go`, …). A new effect goes in
+  `effect_<mechanic>.go`.
+- Everything else is a small type/data file named after the concept it defines:
+  `card.go`, `state.go`, `types.go`, `target.go`, `duration.go`, `destination.go`,
+  `resolver.go`, `text.go`. A new enum or value type gets its **own**
+  `<concept>.go` — e.g. destinations live in `destination.go`, not
+  `game_destination.go`; the `game_` prefix is only for `Game` methods.
+
+Tests live beside their source in `<name>_test.go`. The `card` facade mirrors the
+engine's namespace/type files: `duration.go` → `card/duration.go`,
+`destination.go` → `card/destination.go`.
+
+## Lasting "remainder of the turn" effects (event-driven, never hardcoded)
+
+Some effects last "for the remainder of the turn" and attach to a later game event
+— Full Moon gains Æmber whenever you play a creature, Charge! deals damage whenever
+you play a creature, Crystal Hive gains Æmber whenever a creature reaps, Dimension
+Door makes reaping steal instead of gain. Do **not** add a bespoke `if g.State.Foo…`
+block to the play or reap path (`PlayCreature`, `reapWith`) for each of these — that
+hardcodes every effect into the hot path and makes effects sharing a timing window
+impossible to order. Instead, everything routes through the flat registry in
+`game_lasting.go` (`AddLasting(on Event, do lastingAction, controller, amount)`).
+Because the state is a flat, pointerless value it cannot hold effect closures, so a
+lasting effect is a small enum-tagged record `LastingEffect{On Event, Do
+lastingAction, Controller, Amount}`.
+
+There are two flavors:
+
+- A **reaction** runs *after* an event. The event site emits **one** dispatch —
+  `g.fireLasting(EventCreaturePlayed, actor, subject)` / `g.fireLasting(EventReap,
+  …)` — which gathers every reaction the actor owns for that event and, when several
+  fire at once, lets the controller **order** them (KeyForge lets the active player
+  order simultaneous triggers), resolving each via `resolveReaction`. So "gain Æmber
+  after you play a creature" and "deal damage after you play a creature" order for
+  free. Authored as `card.ForRemainderOfTurn{On: card.Event.CreaturePlayed, Do:
+  card.GainAember{...}}` (Do is a small composed effect — `GainAember` or
+  `DealDamage` to an enemy creature).
+- A **replacement** changes an event's *own outcome* before it happens. The event
+  site queries the registry (`g.lastingReplacement(player, EventReapAember)`) and
+  applies the replacement in place — `gainReapAember` steals instead of gaining when
+  Dimension Door is active. Authored as `card.Instead{Of: card.Event.ReapAember,
+  With: card.Steal}`.
+
+Adding a reaction on an existing event = supporting its `Do` in `lastingActionOf` +
+`resolveReaction`; a new event = an `Event` value, one `fireLasting`/
+`lastingReplacement` call at that site, and the `clause`/`gerund` text. You never
+touch the play/reap path's structure. `EndTurn` drops a player's entries via
+`clearLasting`.
+
+## Constant-granted abilities
+
+When a card in play says that every creature gains an ability, author it as a
+`ConstantAbility` with a `Target` and `Granted` abilities. Annihilation Ritual is
+the model: it grants each creature the ability that purges that creature when it
+is destroyed.
+
+```go
+card.WithConstantAbility(card.ConstantAbility{
+  Target: card.Target.EachCreature,
+  Granted: []card.Ability{{
+    Trigger: card.Trigger.Destroyed,
+    Effect:  card.PurgeCreature{Target: card.Target.This},
+  }},
+}),
+```
+
+The engine gathers every Destroyed ability for all creatures being destroyed,
+then lets the active player order them. A `PurgeCreature{Target: card.Target.This}`
+ability takes its creature out of play immediately, so that creature's remaining
+Destroyed abilities do not resolve and final destruction cleanup does not move it
+to its discard zone. Never implement this kind of card as a global override in
+`discardDestroyed` or another leave-play path.
+
+## KeyForge vernacular
+
+Names — types, methods, fields, effects, targets, everything — must stay within
+KeyForge's own vocabulary rather than generic gaming terms. Say
+`ExceptMostPowerfulCreature`, not `ExceptStrongest`; `CannotFight`, not
+`PreventFight`. When you need the right word, source it in this order:
+
+1. The **provenance files** (`internal/cards/provenance`) and the original card
+   text they point at — the canonical wording.
+2. **Existing implementations** in this repo — reuse an established term instead
+   of coining a synonym.
+
+If neither has a term for the concept, pick the phrasing closest to how KeyForge
+cards are actually written, and flag it for the user.
+
+## Writing abilities (card authoring)
+
+Author cards through the `card` facade in the multiline ability style —
+`card.WithAbility(` breaks onto its own line, the trigger and effect share the
+next line, and each effect struct field goes on its own line when there is more
+than one (single-field effects stay inline):
+
+```go
+card.WithAbility(
+	card.Trigger.Play, card.CannotFight{
+		Player:   card.Opponent,
+		Duration: card.Duration.NextTurn,
+	}),
+```
+
+See `internal/cards/AGENTS.md` for the full card-authoring guide (file layout,
+generated doc comments, wording rules, and tests).

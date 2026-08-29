@@ -3,35 +3,43 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Ammonia Clouds deals 3 damage to every creature in play — both players' — so
-// bodies of 3 power or less are destroyed while tougher ones survive marked.
+// Ammonia Clouds
+//
+//	House:  Mars
+//	Type:   Action
+//	Rarity: Common
+//
+//	Play: Deal 3 damage to each creature.
 func TestAmmoniaClouds(t *testing.T) {
-	g := cardtest.Started(t, engine.Mars)
-	toughAlly := g.AddToBattleline(cardtest.Vanilla("Tough Ally", engine.Mars, 5), 0)
-	g.AddToBattleline(cardtest.Vanilla("Weak Ally", engine.Mars, 3), 0)
-	toughFoe := g.AddToBattleline(cardtest.Vanilla("Tough Foe", engine.Brobnar, 4), 1)
-	g.AddToBattleline(cardtest.Vanilla("Weak Foe", engine.Brobnar, 2), 1)
+	t.Run("deals 3 damage to each creature", func(t *testing.T) {
+		var toughAlly, weakAlly, toughFoe, weakFoe ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Mars,
+				Hand:  ct.Cards(AmmoniaClouds),
+				InPlay: ct.Cards(
+					ct.Bind(&toughAlly, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(5))),
+					ct.Bind(&weakAlly, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+				),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&toughFoe, ct.Creature(ct.OfHouse(card.House.Brobnar), ct.Power(4))),
+					ct.Bind(&weakFoe, ct.Creature(ct.OfHouse(card.House.Brobnar), ct.Power(2))),
+				),
+			},
+		})
 
-	g.AddToHand(AmmoniaClouds, 0)
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
+		h.P1.Play(AmmoniaClouds)
 
-	// Weak creatures (power <= 3) die; only the tough bodies remain.
-	if got := g.Battleline(0); len(got) != 1 || got[0] != toughAlly {
-		t.Errorf("friendly battleline = %v, want just the 5-power ally", got)
-	}
-	if got := g.Battleline(1); len(got) != 1 || got[0] != toughFoe {
-		t.Errorf("enemy battleline = %v, want just the 4-power foe", got)
-	}
-	if g.Damage(toughAlly) != 3 {
-		t.Errorf("tough ally damage = %d, want 3", g.Damage(toughAlly))
-	}
-	if g.Damage(toughFoe) != 3 {
-		t.Errorf("tough foe damage = %d, want 3", g.Damage(toughFoe))
-	}
+		// Weak creatures (power <= 3) die; the tough bodies survive marked with 3.
+		h.Expect(weakAlly).At(ct.Discard)
+		h.Expect(weakFoe).At(ct.Discard)
+		h.Expect(toughAlly).At(ct.PlayArea).Damage(3)
+		h.Expect(toughFoe).At(ct.PlayArea).Damage(3)
+	})
 }

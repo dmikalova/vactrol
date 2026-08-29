@@ -3,21 +3,34 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// World Tree returns a creature from the discard pile to the top of the deck.
+// World Tree
+//
+//	House:  Untamed
+//	Type:   Artifact
+//	Rarity: Rare
+//	Traits: Location
+//
+//	Action: Put a creature from your discard zone on top of your deck.
 func TestWorldTree(t *testing.T) {
-	g := cardtest.Started(t, engine.Untamed)
-	tree := g.AddArtifact(WorldTree, 0)
-	ghost := g.AddToBattleline(cardtest.Vanilla("Ghost", engine.Untamed, 4), 0)
-	g.DestroyEach(0, []engine.LocalID{ghost}) // Ghost -> discard
+	t.Run("returns a creature from the discard zone to the top of the deck", func(t *testing.T) {
+		var ghost ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:   card.House.Untamed,
+				InPlay:  ct.Cards(WorldTree),
+				Discard: ct.Cards(ct.Bind(&ghost, ct.Creature(ct.OfHouse(card.House.Untamed), ct.Power(4)))),
+			},
+		})
 
-	if err := g.UseAction(0, tree); err != nil {
-		t.Fatalf("UseAction: %v", err)
-	}
-	if g.State.Deck[0].Count == 0 || g.State.Deck[0].IDs[0] != ghost {
-		t.Errorf("deck top = %v, want Ghost (%d)", g.State.Deck[0].IDs[:g.State.Deck[0].Count], ghost)
-	}
+		h.P1.UseAction(WorldTree)
+
+		deck := h.Game().State.Deck[0]
+		if deck.Count == 0 || deck.IDs[0] != ghost.ID() {
+			t.Errorf("deck top = %v, want Ghost (%d)", deck.IDs[:deck.Count], ghost.ID())
+		}
+	})
 }

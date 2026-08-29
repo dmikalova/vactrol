@@ -3,32 +3,40 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Ritual of Balance is an artifact whose Action steals 1 Æmber, but only while
-// the opponent is hoarding 6 or more.
+// Ritual of Balance
+//
+//	House:  Untamed
+//	Type:   Artifact
+//	Rarity: Uncommon
+//	Traits: Power
+//
+//	Action: If your opponent has 6 Æmber or more, steal 1 Æmber.
 func TestRitualOfBalance(t *testing.T) {
-	g := cardtest.Started(t, engine.Untamed)
-	art := g.AddArtifact(RitualOfBalance, 0)
+	t.Run("does nothing while the opponent is below 6 Æmber", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Untamed, InPlay: ct.Cards(RitualOfBalance)},
+			P2: ct.Side{Amber: 5},
+		})
 
-	// Below the threshold: the action does nothing.
-	g.State.Aember[1] = 5
-	if err := g.UseAction(0, art); err != nil {
-		t.Fatalf("UseAction: %v", err)
-	}
-	if g.Aember(0) != 0 || g.Aember(1) != 5 {
-		t.Errorf("below threshold: pools = %d/%d, want 0/5", g.Aember(0), g.Aember(1))
-	}
+		h.P1.UseAction(RitualOfBalance)
 
-	// Ready it again and push the opponent to the threshold: now it steals 1.
-	g.State.Cards[art].Exhausted = false
-	g.State.Aember[1] = 6
-	if err := g.UseAction(0, art); err != nil {
-		t.Fatalf("UseAction: %v", err)
-	}
-	if g.Aember(0) != 1 || g.Aember(1) != 5 {
-		t.Errorf("at threshold: pools = %d/%d, want 1/5", g.Aember(0), g.Aember(1))
-	}
+		h.P1.ExpectAmber(0)
+		h.P2.ExpectAmber(5)
+	})
+
+	t.Run("steals 1 Æmber once the opponent has 6 or more", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Untamed, InPlay: ct.Cards(RitualOfBalance)},
+			P2: ct.Side{Amber: 6},
+		})
+
+		h.P1.UseAction(RitualOfBalance)
+
+		h.P1.ExpectAmber(1)
+		h.P2.ExpectAmber(5)
+	})
 }

@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 // This file and its effect_*.go / target.go siblings make up the card effect
 // "AST": the small tree of nodes that both prints a card's rules text and
 // carries it out. Each node type lives with related nodes in a file grouped by
@@ -35,6 +37,18 @@ func validateEffect(e Effect) error {
 	return nil
 }
 
+// errUnsetPlayer is the configuration error a player-taking effect returns when
+// its Player was left as the invalid zero value.
+func errUnsetPlayer(effect string) error {
+	return fmt.Errorf("%s: player must be set (Controller, Opponent, or EachPlayer)", effect)
+}
+
+// errUnsetDuration is the configuration error a timed effect returns when its
+// Duration was left as the invalid zero value.
+func errUnsetDuration(effect string) error {
+	return fmt.Errorf("%s: duration must be set", effect)
+}
+
 // EffectContext carries the state an effect needs while resolving. It exposes the
 // game only through a Resolver, so an effect can inspect and change the game only
 // via that interface — never by reaching into the state directly. Cards are
@@ -48,29 +62,73 @@ type EffectContext struct {
 	// ChosenHouse is a house picked by a ChooseHouseThen, read by
 	// Target.OfChosenHouse targets nested inside it.
 	ChosenHouse House
+	// Healed is how many creatures the most recent Heal healed, read by a
+	// CreaturesHealed count in a following effect of the same resolution.
+	Healed int
+	// Revealed is how many cards the most recent Reveal showed, read by a
+	// CardsRevealed count in a following effect of the same resolution.
+	Revealed int
 }
 
-// PlayerFor resolves a relative Player (Controller/Opponent) to an absolute
-// player index, relative to the ability's controller.
+// Opponent returns the absolute index of the controller's opponent.
+func (ctx *EffectContext) Opponent() int { return 1 - ctx.Controller }
+
+// PlayerFor resolves a relative Player (Controller or Opponent) to an absolute
+// player index. Use it for a Player value held by an effect (e.g. e.Player); for
+// the two fixed players prefer the plainer ctx.Controller and ctx.Opponent().
 func (ctx *EffectContext) PlayerFor(p Player) int {
-	if p == Opponent {
-		return 1 - ctx.Controller
+	switch p {
+	case Opponent:
+		return ctx.Opponent()
+	case Controller, EachPlayer:
+		return ctx.Controller
+	default:
+		panic("engine: effect has no player set (playerUnset)")
 	}
-	return ctx.Controller
+}
+
+// ChooseCreature asks the controlling player to pick one creature from candidates,
+// attributing the prompt to this ability's source card. It is the common form of
+// Resolver.ChooseCreature; call the Resolver directly only when a different player
+// makes the choice (e.g. the owner of a creature being used to fight).
+func (ctx *EffectContext) ChooseCreature(prompt string, candidates []LocalID) (LocalID, bool) {
+	return ctx.Resolver.ChooseCreature(ctx.Controller, ctx.Source, prompt, candidates)
+}
+
+// ChooseOption asks the controlling player to pick one labeled option, attributing
+// the prompt to this ability's source card.
+func (ctx *EffectContext) ChooseOption(prompt string, options []string) int {
+	return ctx.Resolver.ChooseOption(ctx.Controller, ctx.Source, prompt, options)
+}
+
+// OrderByChoice asks the controlling player to arrange ids into a resolution order.
+func (ctx *EffectContext) OrderByChoice(prompt string, ids []LocalID) []LocalID {
+	return ctx.Resolver.OrderByChoice(ctx.Controller, prompt, ids)
 }
 
 // Player selects which player an effect targets, relative to the card's
 // controller: Controller is the player who controls the card, Opponent is their
-// opponent. Cards are written from the controller's point of view, so most
-// effects default to the controller (the zero value).
+// opponent, and EachPlayer is both. Every effect names its player explicitly:
+// there is no default, so the zero value is an invalid placeholder rejected when
+// the card is built and when the effect resolves.
 type Player int
 
 const (
+	// playerUnset is the invalid zero value: an effect must name its player
+	// (Controller, Opponent, or EachPlayer) rather than leave it unset.
+	playerUnset Player = iota
 	// Controller is the player who controls the card/ability.
-	Controller Player = iota
+	Controller
 	// Opponent is the controller's opponent.
 	Opponent
+	// EachPlayer is both players. It is meaningful only for effects that reach
+	// everyone at once (e.g. a KeyCostChange on "each player's keys"); the
+	// single-target effects use only Controller and Opponent.
+	EachPlayer
 )
+
+// valid reports whether p names a real player (not the unset zero value).
+func (p Player) valid() bool { return p != playerUnset }
 
 // SelfName is a placeholder an effect's text uses to refer to its own source
 // card; RenderCardText and the game log substitute it with the card's name so

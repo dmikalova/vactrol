@@ -30,3 +30,18 @@ func TestStunEffects(t *testing.T) {
 		t.Error("unstun should clear the stun on each friendly creature")
 	}
 }
+
+func TestExhaust(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	src := g.AddToBattleline(testCreature("src", 3), 0)
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	e := Exhaust{Target: Target{Kind: TargetThisCreature}}
+	if e.Text() != "exhaust "+SelfName {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if !g.State.Cards[src].Exhausted {
+		t.Error("Exhaust should exhaust the creature")
+	}
+}

@@ -6,12 +6,34 @@ func TestSequenceEffect(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	src := g.AddToBattleline(testCreature("src", 1), 0)
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
-	seq := Sequence{Effects: []Effect{GainAember{Amount: 1}, GainAember{Amount: 2}}}
+	seq := Sequence{Effects: []Effect{GainAember{Player: Controller, Amount: 1}, GainAember{Player: Controller, Amount: 2}}}
 	if seq.Text() != "gain 1 Æmber, and gain 2 Æmber" {
 		t.Errorf("sequence text = %q", seq.Text())
 	}
 	seq.Resolve(ctx)
 	if g.State.Aember[0] != 3 {
 		t.Errorf("aember = %d, want 3", g.State.Aember[0])
+	}
+}
+
+func TestSequenceCombinesSameTarget(t *testing.T) {
+	// Consecutive combinable effects on the same target fold into one phrase.
+	both := Sequence{Effects: []Effect{
+		Stun{Target: Target{Kind: TargetThisCreature}},
+		Exhaust{Target: Target{Kind: TargetThisCreature}},
+	}}
+	if got := both.Text(); got != "stun and exhaust "+SelfName {
+		t.Errorf("combined text = %q", got)
+	}
+
+	// Different targets do not fold, and a trailing non-combinable stands alone.
+	mixed := Sequence{Effects: []Effect{
+		Stun{Target: Target{Kind: TargetThisCreature}},
+		Exhaust{Target: Target{Kind: TargetEachEnemyCreature}},
+		GainAember{Player: Controller, Amount: 1},
+	}}
+	want := "stun " + SelfName + ", and exhaust each enemy creature, and gain 1 Æmber"
+	if got := mixed.Text(); got != want {
+		t.Errorf("mixed text = %q, want %q", got, want)
 	}
 }

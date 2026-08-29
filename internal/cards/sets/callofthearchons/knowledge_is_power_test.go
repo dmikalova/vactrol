@@ -3,24 +3,36 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Knowledge is Power's second option gains 1 Æmber for each archived card.
+// Knowledge is Power
+//
+//	House:  Logos
+//	Type:   Action
+//	Rarity: Rare
+//
+//	Play: Choose one:
+//	- Archive a card from your hand
+//	- For each card in your archives, gain 1 Æmber.
 func TestKnowledgeIsPower(t *testing.T) {
-	g := cardtest.Started(t, engine.Logos)
-	// Two cards already banked in the archives.
-	g.State.Archives[0].IDs[0] = g.Register(cardtest.Vanilla("b1", engine.Logos, 1), 0)
-	g.State.Archives[0].IDs[1] = g.Register(cardtest.Vanilla("b2", engine.Logos, 1), 0)
-	g.State.Archives[0].Count = 2
-	g.AddToHand(KnowledgeIsPower, 0)
-	g.SetChooser(0, housePicker{idx: 1}) // choose the "gain" option
+	t.Run("gains 1 Æmber for each archived card", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Logos,
+				Hand:  ct.Cards(KnowledgeIsPower),
+				Archives: ct.Cards(
+					ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(1)),
+					ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(1)),
+				),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if g.Aember(0) != 2 {
-		t.Errorf("aember = %d, want 2 (1 per each of 2 archived cards)", g.Aember(0))
-	}
+		h.P1.Play(KnowledgeIsPower)
+		h.P1.ExpectPrompt("Choose one")
+		h.P1.ClickOption("gain 1") // the "for each archived card, gain" option
+
+		h.P1.ExpectAmber(2) // 1 per each of the 2 archived cards
+	})
 }

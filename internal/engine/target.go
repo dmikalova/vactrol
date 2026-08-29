@@ -1,6 +1,9 @@
 package engine
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // A Target names the cards an ability acts on. KeyForge abilities are written in
 // terms of noun phrases — "this creature", "each enemy creature", "a friendly
@@ -26,6 +29,9 @@ const (
 	TargetEachEnemyCreature
 	// TargetEachArtifact selects every artifact in play, both players'.
 	TargetEachArtifact
+	// TargetEachInPlay selects every card in play — every creature and artifact,
+	// both players' — including the source card itself.
+	TargetEachInPlay
 	// TargetEachOtherFriendlyCreature selects the controller's creatures except
 	// the source card.
 	TargetEachOtherFriendlyCreature
@@ -35,6 +41,9 @@ const (
 	// TargetChosenEnemyCreature selects a single enemy creature the controller
 	// chooses.
 	TargetChosenEnemyCreature
+	// TargetChosenFriendlyCreature selects a single friendly creature the
+	// controller chooses.
+	TargetChosenFriendlyCreature
 	// TargetChosenArtifact selects a single artifact the controller chooses from
 	// all artifacts in play (either player's).
 	TargetChosenArtifact
@@ -46,13 +55,22 @@ const (
 type Target struct {
 	Kind        TargetKind
 	trait       Trait
+	exceptTrait Trait
 	house       House
+	exceptHouse House
 	chosenHouse bool
 	maxPower    int
 	hasMaxPower bool
 	damaged     bool
+	stunned     bool
 	onFlank     bool
 	notOnFlank  bool
+	neighboring bool
+	// selector is a set-relative refinement applied after the per-card filters. It
+	// can compare the candidates to each other (e.g. "except the most powerful")
+	// and contributes a clause to the printed phrase. nil for targets that select
+	// their whole filtered set.
+	selector Selector
 }
 
 // WithTrait narrows the target to cards that have the given trait, e.g.
@@ -62,10 +80,26 @@ func (t Target) WithTrait(trait Trait) Target {
 	return t
 }
 
+// ExceptTrait narrows the target to cards that do NOT have the given trait,
+// rendering the "non-<trait> trait" qualifier, e.g. a friendly Mars creature
+// ExceptTrait("Agent") reads "a friendly non-Agent trait Mars creature".
+func (t Target) ExceptTrait(trait Trait) Target {
+	t.exceptTrait = trait
+	return t
+}
+
 // OfHouse narrows the target to cards of the given house, e.g.
 // Target{Kind: TargetEachCreature}.OfHouse(Mars).
 func (t Target) OfHouse(h House) Target {
 	t.house = h
+	return t
+}
+
+// ExceptHouse narrows the target to cards NOT of the given house, rendering the
+// "non-<house>" qualifier, e.g. a chosen friendly creature ExceptHouse(Sanctum)
+// reads "a friendly non-Sanctum creature".
+func (t Target) ExceptHouse(h House) Target {
+	t.exceptHouse = h
 	return t
 }
 
@@ -90,6 +124,19 @@ func (t Target) Damaged() Target {
 	return t
 }
 
+// Stunned narrows the target to creatures that are currently stunned.
+func (t Target) Stunned() Target {
+	t.stunned = true
+	return t
+}
+
+// allows reports whether a single card satisfies the target's per-card filters,
+// ignoring its base-set Kind. It is how a Target expresses a condition on one
+// specific card (e.g. a fight restriction testing the defender).
+func (t Target) allows(ctx *EffectContext, id LocalID) bool {
+	return len(t.filter(ctx, []LocalID{id})) == 1
+}
+
 // OnFlank narrows the target to creatures on a flank of their battleline (its
 // leftmost or rightmost creature).
 func (t Target) OnFlank() Target {
@@ -101,6 +148,24 @@ func (t Target) OnFlank() Target {
 // battleline (neither its leftmost nor rightmost creature).
 func (t Target) NotOnFlank() Target {
 	t.notOnFlank = true
+	return t
+}
+
+// Neighboring narrows the target to the source card's battleline neighbors (the
+// creatures immediately to its left and right).
+func (t Target) Neighboring() Target {
+	t.neighboring = true
+	return t
+}
+
+// Selector refines the target with a set-relative rule applied after the per-card
+// filters, e.g. Target{...}.Selector(ExceptMostPowerful). The Selector both picks
+// the final subset and describes itself for the printed phrase, so a niche
+// "relative to the rest of the set" rule composes onto any Target without adding
+// a dedicated field (and future rules — least powerful, and so on — are just more
+// Selector values).
+func (t Target) Selector(s Selector) Target {
+	t.selector = s
 	return t
 }
 
@@ -117,20 +182,34 @@ func (t Target) Text() string {
 	if t.Kind == TargetEachArtifact || t.Kind == TargetChosenArtifact {
 		noun = "artifact"
 	}
+	if t.exceptHouse != HouseNone {
+		noun = "non-" + t.exceptHouse.String() + " " + noun
+	}
 	if t.trait != "" {
 		noun = string(t.trait) + " trait " + noun
 	}
 	if t.house != HouseNone {
 		noun = t.house.String() + " " + noun
 	}
+	if t.exceptTrait != "" {
+		noun = "non-" + string(t.exceptTrait) + " trait " + noun
+	}
 	if t.onFlank {
 		noun = "flank " + noun
+	}
+	if t.neighboring {
+		noun = "neighboring " + noun
 	}
 	if t.damaged {
 		noun = "damaged " + noun
 	}
+	if t.stunned {
+		noun = "stunned " + noun
+	}
 	var phrase string
 	switch t.Kind {
+	case TargetEachInPlay:
+		phrase = "each card in play"
 	case TargetEachCreature, TargetEachArtifact:
 		phrase = "each " + noun
 	case TargetEachFriendlyCreature:
@@ -141,6 +220,8 @@ func (t Target) Text() string {
 		phrase = "each other friendly " + noun
 	case TargetChosenEnemyCreature:
 		phrase = "an enemy " + noun
+	case TargetChosenFriendlyCreature:
+		phrase = "a friendly " + noun
 	case TargetChosenArtifact:
 		phrase = "an " + noun
 	default:
@@ -155,6 +236,9 @@ func (t Target) Text() string {
 	if t.chosenHouse {
 		phrase += " of the chosen house"
 	}
+	if t.selector != nil {
+		phrase = t.selector.clause(phrase)
+	}
 	return phrase
 }
 
@@ -163,28 +247,91 @@ func (t Target) Text() string {
 // (returning nil when there are none or the choice is declined).
 func (t Target) Select(ctx *EffectContext) []LocalID {
 	ids := t.filter(ctx, t.selectBase(ctx))
+	if t.selector != nil {
+		ids = t.selector.refine(ctx, ids)
+	}
 	if !t.isChosen() {
 		return ids
 	}
 	if len(ids) == 0 {
 		return nil
 	}
-	id, ok := ctx.Resolver.ChooseCreature(ctx.Controller, "Choose "+t.Text(), ids)
+	id, ok := ctx.ChooseCreature("Choose "+t.Text(), ids)
 	if !ok {
 		return nil
 	}
 	return []LocalID{id}
 }
 
+// A Selector refines a Target's selected set relative to the whole set — a rule
+// that compares the candidates to each other rather than testing each on its own,
+// such as "except the most powerful creature". It both narrows the ids (refine)
+// and contributes a clause to the target's printed phrase (clause), so these
+// niche rules compose onto any Target without a field per rule.
+type Selector interface {
+	refine(ctx *EffectContext, ids []LocalID) []LocalID
+	clause(phrase string) string
+}
+
+// ExceptMostPowerful is a Selector that drops the single most powerful creature
+// from the set, letting the controller choose which one to keep when several tie
+// for most powerful. A set of one or none keeps its (only, most powerful) member,
+// so nothing is selected.
+var ExceptMostPowerful Selector = exceptMostPowerful{}
+
+// exceptMostPowerful implements the ExceptMostPowerful selector.
+type exceptMostPowerful struct{}
+
+// clause renders "<phrase> except the most powerful <noun>", e.g. "each enemy
+// creature except the most powerful enemy creature".
+func (exceptMostPowerful) clause(phrase string) string {
+	return phrase + " except the most powerful " + strings.TrimPrefix(phrase, "each ")
+}
+
+// refine returns ids without the single most powerful creature, letting the
+// controller choose which to keep when several tie. A set of one or none keeps
+// its (most powerful) member, so nothing is selected.
+func (exceptMostPowerful) refine(ctx *EffectContext, ids []LocalID) []LocalID {
+	if len(ids) <= 1 {
+		return nil
+	}
+	max := ctx.Resolver.Power(ids[0])
+	for _, id := range ids[1:] {
+		if p := ctx.Resolver.Power(id); p > max {
+			max = p
+		}
+	}
+	mostPowerful := make([]LocalID, 0, len(ids))
+	for _, id := range ids {
+		if ctx.Resolver.Power(id) == max {
+			mostPowerful = append(mostPowerful, id)
+		}
+	}
+	spared := mostPowerful[0]
+	if len(mostPowerful) > 1 {
+		if chosen, ok := ctx.ChooseCreature("Choose the most powerful creature to keep", mostPowerful); ok {
+			spared = chosen
+		}
+	}
+	out := make([]LocalID, 0, len(ids)-1)
+	for _, id := range ids {
+		if id != spared {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // isChosen reports whether the Kind resolves to a single player-chosen creature.
 func (t Target) isChosen() bool {
-	return t.Kind == TargetChosenCreature || t.Kind == TargetChosenEnemyCreature || t.Kind == TargetChosenArtifact
+	return t.Kind == TargetChosenCreature || t.Kind == TargetChosenEnemyCreature ||
+		t.Kind == TargetChosenFriendlyCreature || t.Kind == TargetChosenArtifact
 }
 
 // filter narrows ids to those matching the target's trait, power, damaged, and
 // flank filters.
 func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
-	if t.trait == "" && t.house == HouseNone && !t.chosenHouse && !t.hasMaxPower && !t.damaged && !t.onFlank && !t.notOnFlank {
+	if t.trait == "" && t.exceptTrait == "" && t.house == HouseNone && t.exceptHouse == HouseNone && !t.chosenHouse && !t.hasMaxPower && !t.damaged && !t.stunned && !t.onFlank && !t.notOnFlank && !t.neighboring {
 		return ids
 	}
 	out := make([]LocalID, 0, len(ids))
@@ -192,7 +339,13 @@ func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
 		if t.trait != "" && !ctx.Resolver.HasTrait(id, t.trait) {
 			continue
 		}
+		if t.exceptTrait != "" && ctx.Resolver.HasTrait(id, t.exceptTrait) {
+			continue
+		}
 		if t.house != HouseNone && ctx.Resolver.House(id) != t.house {
+			continue
+		}
+		if t.exceptHouse != HouseNone && ctx.Resolver.House(id) == t.exceptHouse {
 			continue
 		}
 		if t.chosenHouse && ctx.Resolver.House(id) != ctx.ChosenHouse {
@@ -204,10 +357,16 @@ func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
 		if t.damaged && ctx.Resolver.Damage(id) == 0 {
 			continue
 		}
+		if t.stunned && !ctx.Resolver.Stunned(id) {
+			continue
+		}
 		if t.onFlank && !onFlank(ctx, id) {
 			continue
 		}
 		if t.notOnFlank && onFlank(ctx, id) {
+			continue
+		}
+		if t.neighboring && !isNeighbor(ctx, ctx.Source, id) {
 			continue
 		}
 		out = append(out, id)
@@ -220,6 +379,16 @@ func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
 func onFlank(ctx *EffectContext, id LocalID) bool {
 	bl := ctx.Resolver.Battleline(ctx.Resolver.Owner(id))
 	return len(bl) > 0 && (bl[0] == id || bl[len(bl)-1] == id)
+}
+
+// isNeighbor reports whether id is one of src's battleline neighbors.
+func isNeighbor(ctx *EffectContext, src, id LocalID) bool {
+	for _, n := range neighbors(ctx, src) {
+		if n == id {
+			return true
+		}
+	}
+	return false
 }
 
 // neighbors returns the creatures immediately adjacent to id in its owner's
@@ -259,13 +428,19 @@ func (t Target) selectBase(ctx *EffectContext) []LocalID {
 		}
 		return nil
 	case TargetEachArtifact, TargetChosenArtifact:
-		return append(ctx.Resolver.Artifacts(ctx.Controller), ctx.Resolver.Artifacts(1-ctx.Controller)...)
+		return append(ctx.Resolver.Artifacts(ctx.Controller), ctx.Resolver.Artifacts(ctx.Opponent())...)
+	case TargetEachInPlay:
+		ids := ctx.Resolver.Battleline(ctx.Controller)
+		ids = append(ids, ctx.Resolver.Battleline(ctx.Opponent())...)
+		ids = append(ids, ctx.Resolver.Artifacts(ctx.Controller)...)
+		ids = append(ids, ctx.Resolver.Artifacts(ctx.Opponent())...)
+		return ids
 	case TargetEachCreature, TargetChosenCreature:
-		return append(ctx.Resolver.Battleline(ctx.Controller), ctx.Resolver.Battleline(1-ctx.Controller)...)
-	case TargetEachFriendlyCreature:
+		return append(ctx.Resolver.Battleline(ctx.Controller), ctx.Resolver.Battleline(ctx.Opponent())...)
+	case TargetEachFriendlyCreature, TargetChosenFriendlyCreature:
 		return ctx.Resolver.Battleline(ctx.Controller)
 	case TargetEachEnemyCreature, TargetChosenEnemyCreature:
-		return ctx.Resolver.Battleline(1 - ctx.Controller)
+		return ctx.Resolver.Battleline(ctx.Opponent())
 	case TargetEachOtherFriendlyCreature:
 		out := make([]LocalID, 0)
 		for _, id := range ctx.Resolver.Battleline(ctx.Controller) {

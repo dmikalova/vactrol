@@ -46,14 +46,17 @@ func TestTargetSelect(t *testing.T) {
 		t.Errorf("chosen-creature (no candidates) = %v, want nil", ids)
 	}
 
-	// TargetChosenEnemyCreature only offers enemy creatures.
-	g.SetChooser(0, nil) // back to the default FirstChooser
-	if ids := (Target{Kind: TargetChosenEnemyCreature}).Select(ctx); len(ids) != 1 || ids[0] != enemy {
-		t.Errorf("chosen-enemy = %v, want [%d]", ids, enemy)
-	}
+	// TargetChosenEnemyCreature only offers enemy creatures. With a single enemy
+	// the choice is forced and taken automatically — a chooser that would decline
+	// is never consulted.
 	g.SetChooser(0, orderRejectChooser{})
+	if ids := (Target{Kind: TargetChosenEnemyCreature}).Select(ctx); len(ids) != 1 || ids[0] != enemy {
+		t.Errorf("single-candidate chosen-enemy = %v, want [%d] (auto-selected)", ids, enemy)
+	}
+	// With two enemies the chooser decides, and may decline.
+	g.AddToBattleline(testCreature("enemy2", 1), 1)
 	if ids := (Target{Kind: TargetChosenEnemyCreature}).Select(ctx); ids != nil {
-		t.Errorf("chosen-enemy (reject) = %v, want nil", ids)
+		t.Errorf("two-candidate chosen-enemy (reject) = %v, want nil", ids)
 	}
 	g.SetChooser(0, nil)
 
@@ -127,6 +130,21 @@ func TestTargetOfHouse(t *testing.T) {
 	}
 }
 
+func TestTargetExceptTrait(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	agent := g.AddToBattleline(NewCard("a", Mars, Creature, Common, WithPower(3), WithTraits("Agent")), 0)
+	martian := g.AddToBattleline(NewCard("m", Mars, Creature, Common, WithPower(3), WithTraits("Martian")), 0)
+	ctx := &EffectContext{Resolver: g, Source: agent, Controller: 0}
+
+	ids := (Target{Kind: TargetEachCreature}).OfHouse(Mars).ExceptTrait("Agent").Select(ctx)
+	if len(ids) != 1 || ids[0] != martian {
+		t.Errorf("ExceptTrait(Agent) = %v, want [%d] (Agent filtered out)", ids, martian)
+	}
+	if got := (Target{Kind: TargetChosenCreature}).OfHouse(Mars).ExceptTrait("Agent").Text(); got != "a non-Agent trait Mars creature" {
+		t.Errorf("ExceptTrait text = %q", got)
+	}
+}
+
 func TestNeighbors(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	a := g.AddToBattleline(testCreature("a", 1), 0)
@@ -149,4 +167,69 @@ func TestNeighbors(t *testing.T) {
 	if got := neighbors(ctx, art); got != nil {
 		t.Errorf("non-battleline neighbors = %v, want nil", got)
 	}
+}
+
+func TestTargetExceptMostPowerful(t *testing.T) {
+	if got := (Target{Kind: TargetEachEnemyCreature}.Selector(ExceptMostPowerful)).Text(); got != "each enemy creature except the most powerful enemy creature" {
+		t.Errorf("enemy text = %q", got)
+	}
+	if got := (Target{Kind: TargetEachFriendlyCreature}.Selector(ExceptMostPowerful)).Text(); got != "each friendly creature except the most powerful friendly creature" {
+		t.Errorf("friendly text = %q", got)
+	}
+
+	// Unique most-powerful (added after a weaker one so the running max updates):
+	// only the most powerful is spared.
+	g := NewGame("A", "B", 1)
+	weak := g.AddToBattleline(testCreature("weak", 3), 0)
+	strong := g.AddToBattleline(testCreature("strong", 7), 0)
+	mid := g.AddToBattleline(testCreature("mid", 5), 0)
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+	got := Target{Kind: TargetEachFriendlyCreature}.Selector(ExceptMostPowerful).Select(ctx)
+	if len(got) != 2 || !containsID(got, weak) || !containsID(got, mid) || containsID(got, strong) {
+		t.Errorf("select = %v, want [weak mid] (most powerful spared)", got)
+	}
+
+	// One creature (or none) is its own most powerful, so nothing is selected.
+	g2 := NewGame("A", "B", 1)
+	g2.AddToBattleline(testCreature("lone", 3), 0)
+	ctx2 := &EffectContext{Resolver: g2, Controller: 0}
+	if got := (Target{Kind: TargetEachFriendlyCreature}.Selector(ExceptMostPowerful)).Select(ctx2); got != nil {
+		t.Errorf("lone select = %v, want nil", got)
+	}
+	if got := (Target{Kind: TargetEachEnemyCreature}.Selector(ExceptMostPowerful)).Select(ctx2); got != nil {
+		t.Errorf("empty select = %v, want nil", got)
+	}
+
+	// Tied most-powerful: the controller chooses which to keep.
+	g3 := NewGame("A", "B", 1)
+	a := g3.AddToBattleline(testCreature("a", 5), 0)
+	b := g3.AddToBattleline(testCreature("b", 5), 0)
+	small := g3.AddToBattleline(testCreature("small", 2), 0)
+	g3.SetChooser(0, orderLastChooser{}) // keep the last tied creature (b)
+	ctx3 := &EffectContext{Resolver: g3, Controller: 0}
+	got = Target{Kind: TargetEachFriendlyCreature}.Selector(ExceptMostPowerful).Select(ctx3)
+	if len(got) != 2 || !containsID(got, a) || !containsID(got, small) || containsID(got, b) {
+		t.Errorf("tie select = %v, want [a small] (b kept)", got)
+	}
+
+	// A rejected tie choice keeps the first tied creature.
+	g4 := NewGame("A", "B", 1)
+	first := g4.AddToBattleline(testCreature("first", 5), 0)
+	second := g4.AddToBattleline(testCreature("second", 5), 0)
+	g4.SetChooser(0, orderRejectChooser{})
+	ctx4 := &EffectContext{Resolver: g4, Controller: 0}
+	got = Target{Kind: TargetEachFriendlyCreature}.Selector(ExceptMostPowerful).Select(ctx4)
+	if len(got) != 1 || got[0] != second || containsID(got, first) {
+		t.Errorf("rejected tie select = %v, want [second] (first kept)", got)
+	}
+}
+
+// containsID reports whether ids contains id.
+func containsID(ids []LocalID, id LocalID) bool {
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
+	}
+	return false
 }

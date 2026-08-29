@@ -3,21 +3,31 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Hallowed Blaster's Action heals 3 damage from a creature the controller chooses.
+// Hallowed Blaster
+//
+//	House:  Sanctum
+//	Type:   Artifact
+//	Rarity: Common
+//	Traits: Weapon
+//
+//	Action: Heal 3 damage from a creature.
 func TestHallowedBlaster(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	art := g.AddArtifact(HallowedBlaster, 0)
-	c := g.AddToBattleline(cardtest.Vanilla("Wounded", engine.Sanctum, 6), 0)
-	g.State.Cards[c].Damage = 4
+	t.Run("heals 3 damage from a chosen creature", func(t *testing.T) {
+		var wounded ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Sanctum,
+				InPlay: ct.Cards(HallowedBlaster, ct.Bind(&wounded, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(6)))),
+			},
+		})
+		wounded.Damaged(4)
 
-	if err := g.UseAction(0, art); err != nil {
-		t.Fatalf("UseAction: %v", err)
-	}
-	if g.Damage(c) != 1 {
-		t.Errorf("damage = %d, want 1 (4 - 3)", g.Damage(c))
-	}
+		h.P1.UseAction(HallowedBlaster)
+
+		h.Expect(wounded).Damage(1) // 4 - 3
+	})
 }

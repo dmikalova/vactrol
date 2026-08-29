@@ -3,20 +3,32 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Ganymede Archivist archives a card from hand when it reaps.
+// Ganymede Archivist
+//
+//	House:  Logos
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  3
+//	Traits: Human • Scientist
+//
+//	Reap: Archive a card from your hand.
 func TestGanymedeArchivist(t *testing.T) {
-	g := cardtest.Started(t, engine.Logos)
-	g.AddToHand(cardtest.Vanilla("Spare", engine.Logos, 2), 0)
-	arch := g.AddToBattleline(GanymedeArchivist, 0)
+	t.Run("archives a card from hand when it reaps", func(t *testing.T) {
+		var spare ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Logos,
+				Hand:   ct.Cards(ct.Bind(&spare, ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(2)))),
+				InPlay: ct.Cards(GanymedeArchivist),
+			},
+		})
 
-	if err := g.Reap(0, arch); err != nil {
-		t.Fatalf("Reap: %v", err)
-	}
-	if g.State.Archives[0].Count != 1 {
-		t.Errorf("archives count = %d, want 1", g.State.Archives[0].Count)
-	}
+		h.P1.Reap(GanymedeArchivist)
+
+		h.Expect(spare).At(ct.Archives)
+	})
 }

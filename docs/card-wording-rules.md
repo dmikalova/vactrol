@@ -75,7 +75,7 @@ Mines, Nepenthe Seed.)
 | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `Return an enemy creature to its owner's hand.`                     | `Put an enemy creature into its owner's hand.`               |
 | `Return Bad Penny to your hand.`                                    | `Put Bad Penny into your hand.`                              |
-| `Return a creature from your discard pile to the top of your deck.` | `Put a creature from your discard pile on top of your deck.` |
+| `Return a creature from your discard zone to the top of your deck.` | `Put a creature from your discard zone on top of your deck.` |
 
 One movement verb (`Put`) covers every destination: `into … hand(s)`,
 `into … archives`, `on top of … deck`. Maps to a `Move{card, zone}` node.
@@ -89,7 +89,7 @@ written with an arrow, not a follow-up sentence.
 
 | Original                                                                                        | Curated                                                                              |
 | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `Purge a creature from a discard pile. If you do, put a +1 power counter on Eater of the Dead.` | `Purge a creature from a discard pile -> give Eater of the Dead a +1 power counter.` |
+| `Purge a creature from a discard zone. If you do, put a +1 power counter on Eater of the Dead.` | `Purge a creature from a discard zone -> give Eater of the Dead a +1 power counter.` |
 | `Destroy a damaged creature. If you do, steal 1 Aember.`                                        | `Destroy a damaged creature -> steal 1 Aember.`                                      |
 | `You may sacrifice another friendly creature. If you do, fully heal Chuff Ape.`                 | `You may destroy another friendly creature -> fully heal Chuff Ape.`                 |
 | `Lose 1 Aember. If you do, you may forge a key at current cost.`                                | `Lose 1 Aember -> forge a key at current cost.`                                      |
@@ -159,17 +159,24 @@ into its owner's archives`.
 
 Each option is a list item; maps to `ChooseOne{options: [...]}`.
 
-## 9. Front-load `for each` / iteration
+## 9. Front-load `for each` / iteration — subject → effect
 
-Counting and iteration clauses lead the sentence.
+Counting and iteration clauses lead the sentence, so a card reads **forward**:
+the subject (what you count) first, then the effect it drives — the reader never
+has to run to the end for the multiplier and jump back.
 
-| Original                                               | Curated                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------- |
-| `Gain 1 Aember for each forged key your opponent has.` | `For each forged key your opponent has, gain 1 Aember.` |
-| `gain 1 Aember each time you play a creature.`         | `each time you play a creature, gain 1 Aember.`         |
-| `Gain 1 Aember for each creature healed this way.`     | `For each creature healed this way, gain 1 Aember.`     |
+| Original                                                          | Curated                                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `Gain 1 Aember for each forged key your opponent has.`            | `For each forged key your opponent has, gain 1 Aember.`             |
+| `gain 1 Aember each time you play a creature.`                    | `each time you play a creature, gain 1 Aember.`                     |
+| `Gain 1 Aember for each creature healed this way.`                | `For each creature healed this way, gain 1 Aember.`                 |
+| `Deal 1 Damage to a creature for each friendly creature in play.` | `For each friendly creature in play, deal 1 damage to a creature.`  |
 
-The loop header precedes the body, matching `ForEach{source, body}`.
+The loop header precedes the body, matching `ForEach{source, body}`. In the
+engine this is the `Count` interface: any effect carrying a `Per Count` renders
+it as a leading `for each <CountText>, <body>` clause (via the shared `forEach`
+helper), so `GainAember`, `DealDamage`, and every future `Per`-scaled effect
+front-load automatically.
 
 ## 10. Global effects are granted abilities
 
@@ -178,7 +185,7 @@ rather than a free-floating static/trigger.
 
 | Original                                                                                                                                                       | Curated                                                                                                                                                       |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `When a creature would enter a discard pile from play, it is purged instead.`                                                                                  | `Each creature gains, "Destroyed: purge this creature."`                                                                                                      |
+| `When a creature would enter a discard zone from play, it is purged instead.`                                                                                  | `Each creature gains, "Destroyed: purge this creature."`                                                                                                      |
 | `Before a creature fights, discard the top card of its controller's deck. If the discarded card is of the active house, exhaust that creature with no effect.` | `Each creature gains, "Before Fight: Discard the top card of its controller's deck. If the discarded card is of the active house, the fight does not occur."` |
 
 Reuses the grant + quoted-ability machinery instead of a bespoke global rule.

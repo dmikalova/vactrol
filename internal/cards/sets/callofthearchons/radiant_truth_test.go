@@ -3,25 +3,36 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Radiant Truth stuns each enemy creature not on a flank, sparing the flanks.
+// Radiant Truth
+//
+//	House:  Sanctum
+//	Type:   Action
+//	Rarity: Uncommon
+//	Æmber:  1
+//
+//	Play: Stun each enemy creature that is not on a flank.
 func TestRadiantTruth(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	left := g.AddToBattleline(cardtest.Vanilla("Left", engine.Mars, 3), 1)
-	mid := g.AddToBattleline(cardtest.Vanilla("Mid", engine.Mars, 3), 1)
-	right := g.AddToBattleline(cardtest.Vanilla("Right", engine.Mars, 3), 1)
-	g.AddToHand(RadiantTruth, 0)
+	t.Run("stuns each enemy creature that is not on a flank", func(t *testing.T) {
+		var left, mid, right ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Sanctum, Hand: ct.Cards(RadiantTruth)},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&left, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+					ct.Bind(&mid, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+					ct.Bind(&right, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+				),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if !g.State.Cards[mid].Stunned {
-		t.Error("the interior enemy creature should be stunned")
-	}
-	if g.State.Cards[left].Stunned || g.State.Cards[right].Stunned {
-		t.Error("flank creatures should not be stunned")
-	}
+		h.P1.Play(RadiantTruth)
+
+		h.Expect(mid).Stunned(true)   // the interior creature is stunned
+		h.Expect(left).Stunned(false) // flanks are spared
+		h.Expect(right).Stunned(false)
+	})
 }

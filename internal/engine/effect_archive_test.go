@@ -36,7 +36,9 @@ func TestArchiveEffect(t *testing.T) {
 
 func TestArchiveEffectDeclined(t *testing.T) {
 	g := NewGame("A", "B", 1)
+	// Two cards, so declining is a real choice (a sole card would be auto-archived).
 	g.AddToHand(testCreature("c", 1), 0)
+	g.AddToHand(testCreature("d", 1), 0)
 	g.SetChooser(0, orderRejectChooser{})
 	ctx := &EffectContext{Resolver: g, Controller: 0}
 	(ArchiveFromHand{Count: 1}).Resolve(ctx)

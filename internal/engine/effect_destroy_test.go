@@ -55,3 +55,33 @@ func TestDestroyChosenArtifact(t *testing.T) {
 		t.Error("the other artifact should be untouched")
 	}
 }
+
+func TestDestroySamePower(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	a := g.AddToBattleline(testCreature("a", 3), 0) // chosen (candidates[0])
+	strong := g.AddToBattleline(testCreature("strong", 5), 0)
+	c := g.AddToBattleline(testCreature("c", 3), 1)
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+
+	e := DestroySamePower{}
+	if e.Text() != "choose a creature - destroy each creature with the same power as the chosen creature" {
+		t.Errorf("text = %q", e.Text())
+	}
+	// The default chooser picks a (power 3); every power-3 creature is destroyed.
+	e.Resolve(ctx)
+	if g.inPlay(a) || g.inPlay(c) {
+		t.Error("power-3 creatures should be destroyed, including the chosen one")
+	}
+	if !g.inPlay(strong) {
+		t.Error("the power-5 creature should survive")
+	}
+
+	// A rejected choice destroys nothing (a second creature makes the choice real,
+	// since a sole candidate would be auto-selected).
+	g.AddToBattleline(testCreature("strong2", 5), 1)
+	g.SetChooser(0, orderRejectChooser{})
+	DestroySamePower{}.Resolve(ctx)
+	if !g.inPlay(strong) {
+		t.Error("rejecting the choice should destroy nothing")
+	}
+}

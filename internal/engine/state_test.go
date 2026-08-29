@@ -2,8 +2,8 @@ package engine
 
 import "testing"
 
-func TestZone(t *testing.T) {
-	var z Zone
+func TestCardList(t *testing.T) {
+	var z CardList
 	z.add(1)
 	z.add(2)
 	z.add(3)

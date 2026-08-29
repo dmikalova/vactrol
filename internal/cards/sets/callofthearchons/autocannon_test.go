@@ -3,25 +3,32 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Autocannon deals 1 damage to a creature as it enters play.
+// Autocannon
+//
+//	House:  Brobnar
+//	Type:   Artifact
+//	Rarity: Rare
+//	Æmber:  1
+//	Traits: Weapon
+//
+//	After a creature enters play, deal 1 damage to it.
 func TestAutocannon(t *testing.T) {
-	g := cardtest.Started(t, engine.Brobnar)
-	g.AddToHand(Autocannon, 0)
-	if _, err := g.PlayArtifact(0, 0); err != nil {
-		t.Fatalf("PlayArtifact: %v", err)
-	}
+	t.Run("deals 1 damage to a creature as it enters play", func(t *testing.T) {
+		var newcomer ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Brobnar,
+				InPlay: ct.Cards(Autocannon),
+				Hand:   ct.Cards(ct.Bind(&newcomer, ct.Creature(ct.OfHouse(card.House.Brobnar), ct.Power(3)))),
+			},
+		})
 
-	// Playing a creature triggers Autocannon, zapping the newcomer for 1.
-	g.AddToHand(cardtest.Vanilla("Newcomer", engine.Brobnar, 3), 0)
-	entered, err := g.PlayCreature(0, 0, false)
-	if err != nil {
-		t.Fatalf("PlayCreature: %v", err)
-	}
-	if g.Damage(entered) != 1 {
-		t.Errorf("entering creature damage = %d, want 1", g.Damage(entered))
-	}
+		h.P1.Play(newcomer) // Autocannon zaps the newcomer for 1
+
+		h.Expect(newcomer).Damage(1)
+	})
 }

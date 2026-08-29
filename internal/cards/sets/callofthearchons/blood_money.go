@@ -17,7 +17,7 @@ var BloodMoney = card.New(
 	card.Provenance(card.CotA, 3),
 	card.WithAbility(
 		card.Trigger.Play, card.Exalt{
-			Player: card.Opponent,
+			Target: card.Target.EnemyCreature,
 			Times:  2,
 		}),
 )

@@ -3,25 +3,34 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Champion Tabris captures 1 Æmber from the opponent's pool onto itself each
-// time it fights.
+// Champion Tabris
+//
+//	House:  Sanctum
+//	Type:   Creature
+//	Rarity: Uncommon
+//	Power:  6
+//	Armor:  2
+//	Traits: Human • Knight
+//
+//	Fight: Champion Tabris captures 1 Æmber.
 func TestChampionTabris(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	tabris := g.AddToBattleline(ChampionTabris, 0)
-	enemy := g.AddToBattleline(cardtest.Vanilla("Foe", engine.Brobnar, 3), 1)
-	g.State.Aember[1] = 2
+	t.Run("captures 1 Æmber when it fights", func(t *testing.T) {
+		var enemy ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Sanctum, InPlay: ct.Cards(ChampionTabris)},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&enemy, ct.Creature(ct.OfHouse(card.House.Brobnar), ct.Power(3)))),
+				Amber:  2,
+			},
+		})
 
-	if err := g.Fight(0, tabris, enemy); err != nil {
-		t.Fatalf("Fight: %v", err)
-	}
-	if g.AmberOn(tabris) != 1 {
-		t.Errorf("captured Æmber on Tabris = %d, want 1", g.AmberOn(tabris))
-	}
-	if g.Aember(1) != 1 {
-		t.Errorf("opponent Æmber = %d, want 1", g.Aember(1))
-	}
+		h.P1.Fight(ChampionTabris, enemy)
+
+		h.Expect(ChampionTabris).AmberOn(1)
+		h.P2.ExpectAmber(1)
+	})
 }

@@ -44,3 +44,81 @@ func TestHealValidate(t *testing.T) {
 		t.Errorf("fixed heal should be valid, got %v", err)
 	}
 }
+
+func TestHealCountsCreaturesHealed(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	a := g.AddToBattleline(testCreature("a", 5), 0)
+	b := g.AddToBattleline(testCreature("b", 5), 1)
+	healthy := g.AddToBattleline(testCreature("healthy", 5), 0)
+	g.State.Cards[a].Damage = 2
+	g.State.Cards[b].Damage = 1
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+
+	// Heal each creature: the two damaged ones are healed, the undamaged one is
+	// skipped, and the tally lands on the context.
+	Heal{Amount: 1, Target: Target{Kind: TargetEachCreature}}.Resolve(ctx)
+	if g.Damage(a) != 1 || g.Damage(b) != 0 {
+		t.Errorf("damage a=%d b=%d, want 1/0", g.Damage(a), g.Damage(b))
+	}
+	if g.Damage(healthy) != 0 {
+		t.Errorf("undamaged creature should stay at 0, got %d", g.Damage(healthy))
+	}
+	if ctx.Healed != 2 {
+		t.Errorf("ctx.Healed = %d, want 2", ctx.Healed)
+	}
+
+	// CreaturesHealed reads that tally and renders the "for each" clause.
+	cnt := CreaturesHealed{}
+	if cnt.Value(ctx) != 2 {
+		t.Errorf("CreaturesHealed.Value = %d, want 2", cnt.Value(ctx))
+	}
+	if cnt.CountText() != "creature healed this way" {
+		t.Errorf("CountText = %q", cnt.CountText())
+	}
+
+	// No damaged creatures: nothing is healed and the tally is zero.
+	g2 := NewGame("A", "B", 1)
+	g2.AddToBattleline(testCreature("c", 5), 0)
+	ctx2 := &EffectContext{Resolver: g2, Controller: 0}
+	Heal{Amount: 1, Target: Target{Kind: TargetEachCreature}}.Resolve(ctx2)
+	if ctx2.Healed != 0 {
+		t.Errorf("ctx.Healed = %d, want 0 (nothing to heal)", ctx2.Healed)
+	}
+}
+
+// TestHealedContextIsolatedAcrossNestedAbilities proves each ability resolution
+// gets its own EffectContext. When one ability's effect chains into a second
+// ability, the nested Heal tallies onto the nested context, so the outer
+// CreaturesHealed keeps reading the outer Heal's total. triggerAbilities builds a
+// fresh &EffectContext per ability, so a chained card can never overwrite the
+// count a parent ability is still counting against.
+func TestHealedContextIsolatedAcrossNestedAbilities(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	a := g.AddToBattleline(testCreature("a", 5), 0)
+	b := g.AddToBattleline(testCreature("b", 5), 0)
+	enemy := g.AddToBattleline(testCreature("enemy", 5), 1)
+	g.State.Cards[a].Damage = 2
+	g.State.Cards[b].Damage = 2
+	g.State.Cards[enemy].Damage = 2
+
+	// A separate friendly creature whose Play ability heals the enemy side. Firing
+	// it mid-sequence heals one creature, so its own context tallies 1 — a value
+	// that must not leak into the outer ability's count of 2.
+	nested := g.AddToBattleline(testCreature("nested", 5,
+		WithAbility(TriggerAfterPlay, Heal{Amount: 1, Target: Target{Kind: TargetEachEnemyCreature}})), 0)
+
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+	seq := Sequence{Effects: []Effect{
+		Heal{Amount: 1, Target: Target{Kind: TargetEachFriendlyCreature}},                 // heals a, b -> ctx.Healed = 2
+		gameEffect{fn: func() { g.triggerAbilities(nested, TriggerAfterPlay, 0, false) }}, // nested heals enemy on its OWN context (Healed = 1)
+		GainAember{Player: Controller, Amount: 1, Per: CreaturesHealed{}},                 // reads THIS context's 2, not the nested 1
+	}}
+	seq.Resolve(ctx)
+
+	if ctx.Healed != 2 {
+		t.Errorf("outer ctx.Healed = %d, want 2 (a nested ability must not overwrite it)", ctx.Healed)
+	}
+	if g.Aember(0) != 2 {
+		t.Errorf("gained %d Æmber, want 2 (outer Heal's count, not the nested 1)", g.Aember(0))
+	}
+}

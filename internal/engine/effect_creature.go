@@ -3,12 +3,12 @@ package engine
 import "strings"
 
 // Some abilities have you choose a single creature and then do one or more things
-// to it — "Ready and fight with a friendly creature." OnChosenCreature models
-// that: it picks one creature and applies an ordered list of CreatureVerbs to
-// that same creature, so the verbs read as one sentence sharing a target.
+// to it — "Ready and fight with a friendly creature." OnChooseCreature models
+// that: it picks one creature (via its Target) and applies an ordered list of
+// CreatureVerbs to it, so the verbs read as one sentence sharing a target.
 
 // CreatureVerb is a single action applied to a chosen creature. Verbs are the
-// building blocks of OnChosenCreature and compose into natural card text.
+// building blocks of OnChooseCreature and compose into natural card text.
 type CreatureVerb interface {
 	VerbText() string
 	Apply(ctx *EffectContext, target LocalID)
@@ -43,7 +43,7 @@ func (FightVerb) VerbText() string { return "fight with" }
 func (FightVerb) Apply(ctx *EffectContext, target LocalID) {
 	owner := ctx.Resolver.Owner(target)
 	enemies := ctx.Resolver.Battleline(1 - owner)
-	victim, ok := ctx.Resolver.ChooseCreature(owner, "Choose a creature to fight", enemies)
+	victim, ok := ctx.Resolver.ChooseCreature(owner, ctx.Source, "Choose a creature to fight", enemies)
 	if !ok {
 		ctx.Resolver.Logf("%s has no creature to fight", ctx.Resolver.Name(target))
 		return
@@ -51,66 +51,32 @@ func (FightVerb) Apply(ctx *EffectContext, target LocalID) {
 	ctx.Resolver.FightWith(target, victim)
 }
 
-// OnChosenCreature picks a single friendly or enemy creature and applies one or
+// OnChooseCreature picks a single creature named by its Target and applies one or
 // more verbs to it. The verbs share the single chosen target, which lets card
 // text read naturally, e.g. "Ready and fight with a friendly creature."
-type OnChosenCreature struct {
-	Player Player
-	// Neighbors restricts the choice to the source creature's battleline
-	// neighbors instead of any friendly/enemy creature ("a neighboring creature").
-	Neighbors bool
-	// ExcludeHouse, when set, drops candidates of that house ("a friendly
-	// non-Sanctum creature").
-	ExcludeHouse House
-	Verbs        []CreatureVerb
-}
-
-// noun renders the target noun phrase.
-func (e OnChosenCreature) noun() string {
-	if e.Neighbors {
-		return "a neighboring creature"
-	}
-	if e.Player == Opponent {
-		return "an enemy creature"
-	}
-	if e.ExcludeHouse != HouseNone {
-		return "a friendly non-" + e.ExcludeHouse.String() + " creature"
-	}
-	return "a friendly creature"
+type OnChooseCreature struct {
+	Target Target
+	Verbs  []CreatureVerb
 }
 
 // Text joins the verbs and the shared target, e.g.
 // "ready and fight with a friendly creature".
-func (e OnChosenCreature) Text() string {
+func (e OnChooseCreature) Text() string {
 	parts := make([]string, 0, len(e.Verbs))
 	for _, v := range e.Verbs {
 		parts = append(parts, v.VerbText())
 	}
-	return strings.Join(parts, " and ") + " " + e.noun()
+	return strings.Join(parts, " and ") + " " + e.Target.Text()
 }
 
-// Resolve chooses the creature once, then applies each verb to it.
-func (e OnChosenCreature) Resolve(ctx *EffectContext) {
-	candidates := ctx.Resolver.Battleline(ctx.PlayerFor(e.Player))
-	if e.Neighbors {
-		candidates = neighbors(ctx, ctx.Source)
-	}
-	if e.ExcludeHouse != HouseNone {
-		kept := make([]LocalID, 0, len(candidates))
-		for _, id := range candidates {
-			if ctx.Resolver.House(id) != e.ExcludeHouse {
-				kept = append(kept, id)
-			}
+// Resolve chooses the creature (through its Target) once, then applies each verb
+// to it. A Target that selects nothing (no candidate or a declined choice) simply
+// applies no verbs.
+func (e OnChooseCreature) Resolve(ctx *EffectContext) {
+	for _, id := range e.Target.Select(ctx) {
+		for _, v := range e.Verbs {
+			v.Apply(ctx, id)
 		}
-		candidates = kept
-	}
-	chosen, ok := ctx.Resolver.ChooseCreature(ctx.Controller, "Choose "+e.noun(), candidates)
-	if !ok {
-		ctx.Resolver.Logf("no legal target for %q", e.Text())
-		return
-	}
-	for _, v := range e.Verbs {
-		v.Apply(ctx, chosen)
 	}
 }
 
@@ -138,9 +104,34 @@ func (UseVerb) Apply(ctx *EffectContext, target LocalID) {
 		labels = append(labels, "use its action")
 		uses = append(uses, func() { ctx.Resolver.UseActionOf(target) })
 	}
-	idx := ctx.Resolver.ChooseOption(owner, "Choose how to use "+ctx.Resolver.Name(target), labels)
+	idx := ctx.Resolver.ChooseOption(owner, ctx.Source, "Choose how to use "+ctx.Resolver.Name(target), labels)
 	if idx < 0 || idx >= len(uses) {
 		return
 	}
 	uses[idx]()
+}
+
+// StunVerb stuns the chosen creature. As a verb it shares a single chosen target
+// with the other verbs of an OnChooseCreature, so "stun and exhaust a creature"
+// reads and resolves as one target rather than two separate choices.
+type StunVerb struct{}
+
+// VerbText returns the verb phrase.
+func (StunVerb) VerbText() string { return "stun" }
+
+// Apply stuns the creature.
+func (StunVerb) Apply(ctx *EffectContext, target LocalID) {
+	ctx.Resolver.SetStunned(target, true)
+}
+
+// ExhaustVerb exhausts the chosen creature. Like StunVerb it is a verb so it can
+// share a single chosen target with other verbs of an OnChooseCreature.
+type ExhaustVerb struct{}
+
+// VerbText returns the verb phrase.
+func (ExhaustVerb) VerbText() string { return "exhaust" }
+
+// Apply exhausts the creature.
+func (ExhaustVerb) Apply(ctx *EffectContext, target LocalID) {
+	ctx.Resolver.SetExhausted(target, true)
 }

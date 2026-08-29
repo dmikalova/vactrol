@@ -6,7 +6,7 @@ func TestForgeKeyEffect(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	ctx := &EffectContext{Resolver: g, Controller: 0}
 	e := ForgeKey{}
-	if e.Text() != "forge a key at its current cost" {
+	if e.Text() != "forge a key at current cost" {
 		t.Errorf("text = %q", e.Text())
 	}
 

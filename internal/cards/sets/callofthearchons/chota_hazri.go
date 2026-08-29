@@ -10,7 +10,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Power:  3
 //	Traits: Human • Witch
 //
-//	Play: Lose 1 Æmber, and forge a key at its current cost.
+//	Play: Lose 1 Æmber, and forge a key at current cost.
 var ChotaHazri = card.New(
 	"Chota Hazri",
 	card.House.Untamed,
@@ -19,8 +19,12 @@ var ChotaHazri = card.New(
 	card.Provenance(card.CotA, 349),
 	card.WithPower(3),
 	card.WithTraits("Human", "Witch"),
-	card.WithAbility(card.Trigger.Play, card.Sequence{Effects: []card.Effect{
-		card.LoseAember{Amount: 1},
-		card.ForgeKey{},
-	}}),
+	card.WithAbility(
+		card.Trigger.Play, card.Sequence{Effects: []card.Effect{
+			card.LoseAember{
+				Player: card.Controller,
+				Amount: 1,
+			},
+			card.ForgeKey{},
+		}}),
 )

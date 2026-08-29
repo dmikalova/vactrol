@@ -26,7 +26,7 @@ func (c OpponentAemberAtLeast) CondText() string {
 
 // Met reports whether the opponent has at least Amount Æmber.
 func (c OpponentAemberAtLeast) Met(ctx *EffectContext) bool {
-	return ctx.Resolver.Aember(1-ctx.Controller) >= c.Amount
+	return ctx.Resolver.Aember(ctx.Opponent()) >= c.Amount
 }
 
 // OpponentAemberExactly is met when the opponent's pool holds exactly Amount
@@ -42,7 +42,21 @@ func (c OpponentAemberExactly) CondText() string {
 
 // Met reports whether the opponent has exactly Amount Æmber.
 func (c OpponentAemberExactly) Met(ctx *EffectContext) bool {
-	return ctx.Resolver.Aember(1-ctx.Controller) == c.Amount
+	return ctx.Resolver.Aember(ctx.Opponent()) == c.Amount
+}
+
+// OpponentAemberMoreThanYou is met while the opponent's pool holds strictly more
+// Æmber than the controller's.
+type OpponentAemberMoreThanYou struct{}
+
+// CondText renders the condition.
+func (OpponentAemberMoreThanYou) CondText() string {
+	return "if your opponent has more Æmber than you"
+}
+
+// Met reports whether the opponent has more Æmber than the controller.
+func (OpponentAemberMoreThanYou) Met(ctx *EffectContext) bool {
+	return ctx.Resolver.Aember(ctx.Opponent()) > ctx.Resolver.Aember(ctx.Controller)
 }
 
 // Conditional resolves Then only when Cond is met. It renders as "<cond>, <then>",
@@ -65,4 +79,31 @@ func (e Conditional) Resolve(ctx *EffectContext) {
 // validate checks the gated effect for configuration errors.
 func (e Conditional) validate() error {
 	return validateEffect(e.Then)
+}
+
+// RepeatWhile resolves Do again and again for as long as Cond holds, re-checking
+// after each pass — a self-looping effect such as "if your opponent has more
+// Æmber than you, steal 1 Æmber -> repeat this effect". Do must make progress
+// toward ending the loop (each pass changes the state Cond checks).
+type RepeatWhile struct {
+	Cond Condition
+	Do   Effect
+}
+
+// Text renders the loop, leading with the condition and closing with the
+// self-repeat gate.
+func (e RepeatWhile) Text() string {
+	return e.Cond.CondText() + ", " + e.Do.Text() + " -> repeat this effect"
+}
+
+// Resolve runs Do while Cond is met.
+func (e RepeatWhile) Resolve(ctx *EffectContext) {
+	for e.Cond.Met(ctx) {
+		e.Do.Resolve(ctx)
+	}
+}
+
+// validate checks the looped effect for configuration errors.
+func (e RepeatWhile) validate() error {
+	return validateEffect(e.Do)
 }

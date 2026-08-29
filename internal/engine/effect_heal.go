@@ -22,15 +22,24 @@ func (e Heal) Text() string {
 	return fmt.Sprintf("heal %d damage from %s", e.Amount, e.Target.Text())
 }
 
-// Resolve removes the damage from each selected creature (all of it when Fully).
+// Resolve removes the damage from each selected creature (all of it when Fully),
+// and records how many were actually healed on the context so a following effect
+// can scale with it (see CreaturesHealed). A creature with no damage is unaffected
+// and does not count as healed.
 func (e Heal) Resolve(ctx *EffectContext) {
+	healed := 0
 	for _, id := range e.Target.Select(ctx) {
-		if e.Fully {
-			ctx.Resolver.SetDamage(id, 0)
+		if ctx.Resolver.Damage(id) == 0 {
 			continue
 		}
-		ctx.Resolver.SetDamage(id, ctx.Resolver.Damage(id)-e.Amount)
+		healed++
+		if e.Fully {
+			ctx.Resolver.SetDamage(id, 0)
+		} else {
+			ctx.Resolver.SetDamage(id, ctx.Resolver.Damage(id)-e.Amount)
+		}
 	}
+	ctx.Healed = healed
 }
 
 // validate rejects a Heal that sets both a fixed Amount and Fully, since the two
@@ -41,3 +50,16 @@ func (e Heal) validate() error {
 	}
 	return nil
 }
+
+// CreaturesHealed counts the creatures the most recent Heal actually healed — the
+// "for each creature healed this way" clause. Heal records the tally on the
+// context, so pairing it after a Heal in a Sequence lets any effect (gain Æmber,
+// deal damage, ...) scale with the number healed without a bespoke combined
+// effect.
+type CreaturesHealed struct{}
+
+// Value returns how many creatures the preceding Heal healed.
+func (CreaturesHealed) Value(ctx *EffectContext) int { return ctx.Healed }
+
+// CountText renders the singular noun the "for each" clause repeats.
+func (CreaturesHealed) CountText() string { return "creature healed this way" }

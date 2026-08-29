@@ -18,16 +18,23 @@ type GainAember struct {
 	Per    Count
 }
 
+// validate rejects a GainAember whose player was left unset.
+func (e GainAember) validate() error {
+	if !e.Player.valid() {
+		return errUnsetPlayer("GainAember")
+	}
+	return nil
+}
+
 // Text renders the effect, e.g. "gain 1 Æmber" or "your opponent gains 2 Æmber".
+// A "for each" count leads the sentence (rule 9), e.g. "for each key your opponent
+// has forged, gain 1 Æmber".
 func (e GainAember) Text() string {
 	phrase := fmt.Sprintf("gain %d Æmber", e.Amount)
 	if e.Player == Opponent {
 		phrase = fmt.Sprintf("your opponent gains %d Æmber", e.Amount)
 	}
-	if e.Per != nil {
-		phrase += " for each " + e.Per.CountText()
-	}
-	return phrase
+	return forEach(e.Per, phrase)
 }
 
 // Resolve adds the Æmber to the selected player's pool.
@@ -49,6 +56,14 @@ func (e GainAember) Resolve(ctx *EffectContext) {
 type LoseAember struct {
 	Player Player
 	Amount int
+}
+
+// validate rejects a LoseAember whose player was left unset.
+func (e LoseAember) validate() error {
+	if !e.Player.valid() {
+		return errUnsetPlayer("LoseAember")
+	}
+	return nil
 }
 
 // Text renders the effect, e.g. "lose 1 Æmber" or "your opponent loses 4 Æmber".
@@ -80,7 +95,7 @@ func (e StealAember) Text() string { return fmt.Sprintf("steal %d Æmber", e.Amo
 
 // Resolve moves the Æmber from the opponent's pool to the controller's.
 func (e StealAember) Resolve(ctx *EffectContext) {
-	opp := 1 - ctx.Controller
+	opp := ctx.Opponent()
 	amt := min(e.Amount, ctx.Resolver.Aember(opp))
 	ctx.Resolver.SetAember(opp, ctx.Resolver.Aember(opp)-amt)
 	ctx.Resolver.SetAember(ctx.Controller, ctx.Resolver.Aember(ctx.Controller)+amt)
@@ -95,18 +110,28 @@ func (e StealAember) Resolve(ctx *EffectContext) {
 //rulebook:effect Capture Æmber
 type CaptureAember struct {
 	Amount int
+	// All captures the opponent's entire pool instead of a fixed Amount.
+	All bool
 }
 
-// Text renders the effect, e.g. "{self} captures 1 Æmber"; the source card's
-// name is substituted for the self placeholder when the card is rendered.
+// Text renders the effect, e.g. "{self} captures 1 Æmber" or "{self} captures all
+// your opponent's Æmber"; the source card's name replaces the self placeholder
+// when the card is rendered.
 func (e CaptureAember) Text() string {
+	if e.All {
+		return fmt.Sprintf("%s captures all your opponent's Æmber", SelfName)
+	}
 	return fmt.Sprintf("%s captures %d Æmber", SelfName, e.Amount)
 }
 
 // Resolve moves the Æmber from the opponent's pool onto the source creature.
 func (e CaptureAember) Resolve(ctx *EffectContext) {
-	opp := 1 - ctx.Controller
-	amt := min(e.Amount, ctx.Resolver.Aember(opp))
+	opp := ctx.Opponent()
+	amt := e.Amount
+	if e.All {
+		amt = ctx.Resolver.Aember(opp)
+	}
+	amt = min(amt, ctx.Resolver.Aember(opp))
 	ctx.Resolver.SetAember(opp, ctx.Resolver.Aember(opp)-amt)
 	ctx.Resolver.AddAmberOn(ctx.Source, amt)
 	ctx.Resolver.Logf("%s captures %d Æmber", ctx.Resolver.Name(ctx.Source), amt)
@@ -119,35 +144,49 @@ func (e CaptureAember) Resolve(ctx *EffectContext) {
 //
 //rulebook:effect Exalt
 type Exalt struct {
-	Player Player
+	Target Target
 	Times  int
-}
-
-// noun renders the target noun phrase.
-func (e Exalt) noun() string {
-	if e.Player == Opponent {
-		return "an enemy creature"
-	}
-	return "a friendly creature"
 }
 
 // Text renders the effect, e.g. "exalt an enemy creature 2 times". A single
 // exalt drops the count so it reads naturally.
 func (e Exalt) Text() string {
 	if e.Times == 1 {
-		return "exalt " + e.noun()
+		return "exalt " + e.Target.Text()
 	}
-	return fmt.Sprintf("exalt %s %d times", e.noun(), e.Times)
+	return fmt.Sprintf("exalt %s %d times", e.Target.Text(), e.Times)
 }
 
-// Resolve chooses a creature and places Times Æmber on it.
+// Resolve chooses a creature (through the Target) and places Times Æmber on it.
 func (e Exalt) Resolve(ctx *EffectContext) {
-	candidates := ctx.Resolver.Battleline(ctx.PlayerFor(e.Player))
-	chosen, ok := ctx.Resolver.ChooseCreature(ctx.Controller, "Choose "+e.noun()+" to exalt", candidates)
-	if !ok {
-		ctx.Resolver.Logf("no legal target for %q", e.Text())
-		return
+	for _, id := range e.Target.Select(ctx) {
+		ctx.Resolver.AddAmberOn(id, e.Times)
+		ctx.Resolver.Logf("%s is exalted (%d Æmber placed)", ctx.Resolver.Name(id), e.Times)
 	}
-	ctx.Resolver.AddAmberOn(chosen, e.Times)
-	ctx.Resolver.Logf("%s is exalted (%d Æmber placed)", ctx.Resolver.Name(chosen), e.Times)
+}
+
+// Some effects cap both pools at once: every player holding more than Keep Æmber
+// loses the excess and is left with exactly Keep, while a player already at or
+// below Keep is untouched. This reins in a runaway leader without punishing a
+// player who has been spending.
+//
+//rulebook:effect Reduce Æmber
+type EachPlayerLosesAllBut struct {
+	Keep int
+}
+
+// Text renders the effect, e.g. "each player with 6 Æmber or more loses all but
+// 5 Æmber".
+func (e EachPlayerLosesAllBut) Text() string {
+	return fmt.Sprintf("each player with %d Æmber or more loses all but %d Æmber", e.Keep+1, e.Keep)
+}
+
+// Resolve reduces each player's pool that exceeds Keep down to Keep.
+func (e EachPlayerLosesAllBut) Resolve(ctx *EffectContext) {
+	for p := 0; p < 2; p++ {
+		if ctx.Resolver.Aember(p) > e.Keep {
+			ctx.Resolver.SetAember(p, e.Keep)
+			ctx.Resolver.Logf("%s is reduced to %d Æmber", ctx.Resolver.PlayerName(p), e.Keep)
+		}
+	}
 }

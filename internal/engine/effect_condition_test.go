@@ -37,3 +37,31 @@ func TestConditionalEffect(t *testing.T) {
 		t.Errorf("exact met: you=%d opp=%d, want 1/0", g.State.Aember[0], g.State.Aember[1])
 	}
 }
+
+func TestRepeatWhile(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.State.Aember[0], g.State.Aember[1] = 0, 5 // opponent leads
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+
+	e := RepeatWhile{Cond: OpponentAemberMoreThanYou{}, Do: StealAember{Amount: 1}}
+	if e.Text() != "if your opponent has more Æmber than you, steal 1 Æmber -> repeat this effect" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	// 5/0 -> 4/1 -> 3/2 -> 2/3 (opponent no longer leads): 3 steals.
+	if g.Aember(0) != 3 || g.Aember(1) != 2 {
+		t.Errorf("after repeat: you=%d opp=%d, want 3/2", g.Aember(0), g.Aember(1))
+	}
+
+	// Condition false from the start: the loop never runs.
+	g2 := NewGame("A", "B", 1)
+	g2.State.Aember[0], g2.State.Aember[1] = 3, 3
+	e.Resolve(&EffectContext{Resolver: g2, Controller: 0})
+	if g2.Aember(0) != 3 || g2.Aember(1) != 3 {
+		t.Errorf("equal pools should not steal: you=%d opp=%d", g2.Aember(0), g2.Aember(1))
+	}
+
+	if err := validateEffect(RepeatWhile{Do: StealAember{Amount: 1}}); err != nil {
+		t.Errorf("validate = %v", err)
+	}
+}

@@ -22,5 +22,8 @@ var DewFaerie = card.New(
 	card.WithTraits("Faerie"),
 	card.WithKeywords(card.Keyword.Elusive),
 	card.WithAbility(
-		card.Trigger.Reap, card.GainAember{Amount: 1}),
+		card.Trigger.Reap, card.GainAember{
+			Player: card.Controller,
+			Amount: 1,
+		}),
 )

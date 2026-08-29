@@ -3,23 +3,29 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Fear puts a chosen enemy creature back into its owner's hand.
+// Fear
+//
+//	House:  Dis
+//	Type:   Action
+//	Rarity: Common
+//
+//	Play: Put an enemy creature into its owner's hand.
 func TestFear(t *testing.T) {
-	g := cardtest.Started(t, engine.Dis)
-	g.AddToBattleline(cardtest.Vanilla("Enemy", engine.Mars, 3), 1)
-	g.AddToHand(Fear, 0)
+	t.Run("puts a chosen enemy creature into its owner's hand", func(t *testing.T) {
+		var enemy ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Dis, Hand: ct.Cards(Fear)},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&enemy, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3)))),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if len(g.Battleline(1)) != 0 {
-		t.Error("enemy creature should have left play")
-	}
-	if g.State.Hand[1].Count != 1 {
-		t.Errorf("enemy hand = %d, want 1 (creature returned)", g.State.Hand[1].Count)
-	}
+		h.P1.Play(Fear)
+
+		h.Expect(enemy).At(ct.Hand)
+	})
 }

@@ -3,30 +3,40 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Clear Mind removes the stun from every friendly creature, leaving the
-// opponent's stunned creatures untouched.
+// Clear Mind
+//
+//	House:  Sanctum
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
+//	Play: Unstun each friendly creature.
 func TestClearMind(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	ally1 := g.AddToBattleline(cardtest.Vanilla("ally1", engine.Sanctum, 3), 0)
-	ally2 := g.AddToBattleline(cardtest.Vanilla("ally2", engine.Sanctum, 3), 0)
-	foe := g.AddToBattleline(cardtest.Vanilla("foe", engine.Dis, 3), 1)
-	g.State.Cards[ally1].Stunned = true
-	g.State.Cards[ally2].Stunned = true
-	g.State.Cards[foe].Stunned = true
+	t.Run("unstuns each friendly creature but not the opponent's", func(t *testing.T) {
+		var ally1, ally2, foe ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Sanctum,
+				InPlay: ct.Cards(
+					ct.Bind(&ally1, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(3))),
+					ct.Bind(&ally2, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(3))),
+				),
+				Hand: ct.Cards(ClearMind),
+			},
+			P2: ct.Side{InPlay: ct.Cards(ct.Bind(&foe, ct.Creature(ct.OfHouse(card.House.Dis), ct.Power(3))))},
+		})
+		ally1.Stun()
+		ally2.Stun()
+		foe.Stun()
 
-	g.AddToHand(ClearMind, 0)
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
+		h.P1.Play(ClearMind)
 
-	if g.State.Cards[ally1].Stunned || g.State.Cards[ally2].Stunned {
-		t.Error("Clear Mind should unstun each friendly creature")
-	}
-	if !g.State.Cards[foe].Stunned {
-		t.Error("Clear Mind should not affect enemy creatures")
-	}
+		h.Expect(ally1).Stunned(false)
+		h.Expect(ally2).Stunned(false)
+		h.Expect(foe).Stunned(true) // enemy creatures are unaffected
+	})
 }

@@ -3,21 +3,34 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 	"github.com/dmikalova/vactrol/internal/engine"
 )
 
-// Bilgum Avalanche deals 2 damage to each enemy creature every time its
-// controller forges a key.
+// Bilgum Avalanche
+//
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Rare
+//	Power:  5
+//	Traits: Giant
+//
+//	After you forge a key, deal 2 damage to each enemy creature.
 func TestBilgumAvalanche(t *testing.T) {
-	g := cardtest.Started(t, engine.Brobnar)
-	g.AddToBattleline(BilgumAvalanche, 0)
-	foe := g.AddToBattleline(cardtest.Vanilla("foe", engine.Brobnar, 5), 1)
+	t.Run("deals 2 damage to each enemy creature when its controller forges a key", func(t *testing.T) {
+		var foe ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Brobnar,
+				InPlay: ct.Cards(BilgumAvalanche),
+				Amber:  engine.KeyCost,
+			},
+			P2: ct.Side{InPlay: ct.Cards(ct.Bind(&foe, ct.Creature(ct.OfHouse(card.House.Brobnar), ct.Power(5))))},
+		})
 
-	g.State.Aember[0] = engine.KeyCost
-	g.BeginTurn(0)
+		h.Game().BeginTurn(0) // forge a key with the seeded Æmber
 
-	if g.Damage(foe) != 2 {
-		t.Errorf("enemy creature damage = %d, want 2", g.Damage(foe))
-	}
+		h.Expect(foe).Damage(2)
+	})
 }

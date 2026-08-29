@@ -9,7 +9,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Rarity: Rare
 //	Traits: Location
 //
-//	Action: Put a creature from your discard pile on top of your deck.
+//	Action: Put a creature from your discard zone on top of your deck.
 var WorldTree = card.New(
 	"World Tree",
 	card.House.Untamed,
@@ -17,5 +17,9 @@ var WorldTree = card.New(
 	card.Rarity.Rare,
 	card.Provenance(card.CotA, 344),
 	card.WithTraits("Location"),
-	card.WithAbility(card.Trigger.Action, card.ReturnFromDiscard{CreaturesOnly: true, ToDeck: true}),
+	card.WithAbility(
+		card.Trigger.Action, card.ReturnFromDiscard{
+			Type:        card.Type.Creature,
+			Destination: card.To.TopOfDeck,
+		}),
 )

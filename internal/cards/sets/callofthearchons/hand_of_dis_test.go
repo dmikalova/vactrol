@@ -3,24 +3,35 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Hand of Dis destroys a chosen creature that is not on a flank, so only the
-// interior of a three-creature line is a legal target.
+// Hand of Dis
+//
+//	House:  Dis
+//	Type:   Action
+//	Rarity: Common
+//
+//	Play: Destroy a creature that is not on a flank.
 func TestHandOfDis(t *testing.T) {
-	g := cardtest.Started(t, engine.Dis)
-	left := g.AddToBattleline(cardtest.Vanilla("Left", engine.Mars, 3), 1)
-	mid := g.AddToBattleline(cardtest.Vanilla("Mid", engine.Mars, 3), 1)
-	right := g.AddToBattleline(cardtest.Vanilla("Right", engine.Mars, 3), 1)
-	g.AddToHand(HandOfDis, 0)
+	t.Run("destroys a chosen creature that is not on a flank", func(t *testing.T) {
+		var left, mid, right ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Dis, Hand: ct.Cards(HandOfDis)},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&left, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+					ct.Bind(&mid, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+					ct.Bind(&right, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+				),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	bl := g.Battleline(1)
-	if len(bl) != 2 || bl[0] != left || bl[1] != right {
-		t.Errorf("battleline = %v, want the two flanks [%d %d] (mid %d destroyed)", bl, left, right, mid)
-	}
+		h.P1.Play(HandOfDis) // mid is the only non-flank creature, so it is the forced target
+
+		h.Expect(mid).At(ct.Discard)
+		h.Expect(left).At(ct.PlayArea)
+		h.Expect(right).At(ct.PlayArea)
+	})
 }

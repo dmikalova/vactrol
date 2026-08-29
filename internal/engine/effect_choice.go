@@ -31,7 +31,7 @@ func (e ChooseOne) Resolve(ctx *EffectContext) {
 	for i, o := range e.Options {
 		options[i] = o.Text()
 	}
-	idx := ctx.Resolver.ChooseOption(ctx.Controller, "Choose one", options)
+	idx := ctx.ChooseOption("Choose one", options)
 	if idx < 0 || idx >= len(e.Options) {
 		return
 	}
@@ -56,16 +56,17 @@ type ChooseHouseThen struct {
 	Then Effect
 }
 
-// Text renders the effect, e.g. "choose a house, then stun each creature of the
-// chosen house".
+// Text renders the effect, e.g. "choose a house - stun each creature of the
+// chosen house". The dash keeps the choice and its consequence visibly bound
+// without the mechanical-sounding ", then".
 func (e ChooseHouseThen) Text() string {
-	return "choose a house, then " + e.Then.Text()
+	return "choose a house - " + e.Then.Text()
 }
 
 // Resolve asks for a house, stores it on the context, then resolves Then.
 func (e ChooseHouseThen) Resolve(ctx *EffectContext) {
 	options := houseNames[1:] // every house except HouseNone
-	idx := ctx.Resolver.ChooseOption(ctx.Controller, "Choose a house", options)
+	idx := ctx.ChooseOption("Choose a house", options)
 	if idx < 0 || idx >= len(options) {
 		return
 	}

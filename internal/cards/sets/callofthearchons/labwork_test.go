@@ -3,20 +3,30 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Labwork archives a card from hand.
+// Labwork
+//
+//	House:  Logos
+//	Type:   Action
+//	Rarity: Common
+//	Æmber:  1
+//
+//	Play: Archive a card from your hand.
 func TestLabwork(t *testing.T) {
-	g := cardtest.Started(t, engine.Logos)
-	g.AddToHand(Labwork, 0)
-	g.AddToHand(cardtest.Vanilla("Spare", engine.Logos, 2), 0)
+	t.Run("archives a card from hand", func(t *testing.T) {
+		var spare ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Logos,
+				Hand:  ct.Cards(Labwork, ct.Bind(&spare, ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(2)))),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if g.State.Archives[0].Count != 1 {
-		t.Errorf("archives count = %d, want 1", g.State.Archives[0].Count)
-	}
+		h.P1.Play(Labwork)
+
+		h.Expect(spare).At(ct.Archives)
+	})
 }

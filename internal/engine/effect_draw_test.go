@@ -25,3 +25,20 @@ func TestDrawEffect(t *testing.T) {
 		t.Errorf("hand after empty-deck draw = %d, want 2", g.State.Hand[0].Count)
 	}
 }
+
+func TestDrawPer(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.AddToDeck(testCreature("d1", 1), 0)
+	g.AddToDeck(testCreature("d2", 1), 0)
+	ctx := &EffectContext{Resolver: g, Controller: 0, Revealed: 2}
+
+	e := Draw{Amount: 1, Per: CardsRevealed{}}
+	if e.Text() != "for each card revealed this way, draw a card" {
+		t.Errorf("text = %q", e.Text())
+	}
+	before := g.State.Hand[0].Count
+	e.Resolve(ctx) // Per multiplies: 1 * 2 revealed = draw 2
+	if g.State.Hand[0].Count != before+2 {
+		t.Errorf("hand = %d, want %d", g.State.Hand[0].Count, before+2)
+	}
+}

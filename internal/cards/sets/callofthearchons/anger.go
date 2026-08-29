@@ -18,8 +18,8 @@ var Anger = card.New(
 	card.Provenance(card.CotA, 1),
 	card.WithAemberBonus(1),
 	card.WithAbility(
-		card.Trigger.Play, card.OnChosenCreature{
-			Player: card.Controller,
+		card.Trigger.Play, card.OnChooseCreature{
+			Target: card.Target.FriendlyCreature,
 			Verbs:  []card.CreatureVerb{card.ReadyVerb{}, card.FightVerb{}},
 		}),
 )

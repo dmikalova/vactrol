@@ -66,7 +66,7 @@ const (
 	//rulebook:cardtype Creature
 	Creature CardType = "Creature"
 	// An action is a one-shot card: its effect resolves as you play it, and it
-	// then goes straight to your discard pile.
+	// then goes straight to your discard zone.
 	//
 	//rulebook:cardtype Action
 	Action CardType = "Action"
@@ -118,12 +118,15 @@ const (
 type Trigger int
 
 const (
+	// triggerUnset is the invalid zero value: an ability must name its trigger
+	// rather than leave it unset.
+	triggerUnset Trigger = iota
 	// A Play ability resolves right after you play the card from your hand. On a
 	// creature or artifact it fires as the card enters play; on an action it is the
 	// card's one-shot effect.
 	//
 	//rulebook:ability Play
-	TriggerAfterPlay Trigger = iota
+	TriggerAfterPlay
 	// A Reap ability resolves after you use a ready creature to reap. Reaping gains
 	// you 1 Æmber and exhausts the creature; the ability resolves in addition.
 	//
@@ -149,7 +152,7 @@ const (
 	//rulebook:ability After a Creature Enters Play
 	TriggerAfterCreatureEnters
 	// A Destroyed ability resolves as the card is destroyed, before it reaches the
-	// discard pile, so it can still act on the board it is leaving.
+	// discard zone, so it can still act on the board it is leaving.
 	//
 	//rulebook:ability Destroyed
 	TriggerDestroyed
@@ -173,6 +176,9 @@ const (
 // prefix returns the printed text prefix for a trigger and whether the effect
 // clause that follows should be capitalized (colon-style triggers start a new
 // sentence; comma-style triggers continue one).
+// valid reports whether t names a real trigger (not the unset zero value).
+func (t Trigger) valid() bool { return t != triggerUnset }
+
 func (t Trigger) prefix() (text string, capitalizeEffect bool) {
 	switch t {
 	case TriggerAfterPlay:

@@ -23,14 +23,3 @@ implements it, so what you read here is always what the game actually does.
 - **Exhaustion** gates a creature's activity. Using a creature to reap, fight, or
   take an action exhausts it; creatures and artifacts also enter play exhausted.
   Everything you control readies at the end of your turn.
-
-## A turn, step by step
-
-1. **Forge a key** if you can afford one.
-2. **Choose a house.** For the rest of the turn you may only play and use cards of
-   that house (except cards that ignore the restriction, such as Versatile ones).
-3. **Play, use, and discard** as many of your active-house cards as you like:
-   play cards from hand, and use your ready creatures to reap for Æmber or fight
-   enemy creatures.
-4. **Ready** all of your exhausted cards.
-5. **Draw** back up to a full hand.

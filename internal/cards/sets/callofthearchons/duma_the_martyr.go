@@ -20,10 +20,11 @@ var DumaTheMartyr = card.New(
 	card.WithPower(3),
 	card.WithTraits("Human"),
 	card.WithAbility(
-		card.Trigger.Destroyed, card.Sequence{
-			Effects: []card.Effect{
-				card.Heal{Fully: true, Target: card.Target.EachOtherFriendlyCreature},
-				card.Draw{Amount: 2},
+		card.Trigger.Destroyed, card.Sequence{Effects: []card.Effect{
+			card.Heal{
+				Fully:  true,
+				Target: card.Target.EachOtherFriendlyCreature,
 			},
-		}),
+			card.Draw{Amount: 2},
+		}}),
 )

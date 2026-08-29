@@ -3,26 +3,29 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Charette captures 3 Æmber from the opponent's pool onto itself when played.
+// Charette
+//
+//	House:  Dis
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  4
+//	Traits: Demon
+//
+//	Play: Charette captures 3 Æmber.
 func TestCharette(t *testing.T) {
-	g := cardtest.Started(t, engine.Dis)
-	g.State.Aember[1] = 5
-	g.AddToHand(Charette, 0)
-	id, err := g.PlayCreature(0, 0, false)
-	if err != nil {
-		t.Fatalf("PlayCreature: %v", err)
-	}
-	if g.Power(id) != 4 {
-		t.Errorf("Charette power = %d, want 4", g.Power(id))
-	}
-	if g.AmberOn(id) != 3 {
-		t.Errorf("captured Æmber = %d, want 3", g.AmberOn(id))
-	}
-	if g.Aember(1) != 2 {
-		t.Errorf("opponent Æmber = %d, want 2", g.Aember(1))
-	}
+	t.Run("captures 3 Æmber when played", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Dis, Hand: ct.Cards(Charette)},
+			P2: ct.Side{Amber: 5},
+		})
+
+		h.P1.Play(Charette)
+
+		h.Expect(Charette).Power(4).AmberOn(3)
+		h.P2.ExpectAmber(2)
+	})
 }

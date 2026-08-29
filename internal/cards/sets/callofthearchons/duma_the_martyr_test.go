@@ -3,33 +3,45 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Duma the Martyr fully heals each other friendly creature and draws 2 cards
-// when it is destroyed.
+// Duma the Martyr
+//
+//	House:  Sanctum
+//	Type:   Creature
+//	Rarity: Rare
+//	Power:  3
+//	Traits: Human
+//
+//	Destroyed: Fully heal each other friendly creature, and draw 2 cards.
 func TestDumaTheMartyr(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	duma := g.AddToBattleline(DumaTheMartyr, 0)
-	other := g.AddToBattleline(cardtest.Vanilla("ally", engine.Sanctum, 4), 0)
-	g.State.Cards[other].Damage = 2
-	g.AddToDeck(cardtest.Vanilla("d1", engine.Sanctum, 1), 0)
-	g.AddToDeck(cardtest.Vanilla("d2", engine.Sanctum, 1), 0)
-	enemy := g.AddToBattleline(cardtest.Vanilla("foe", engine.Sanctum, 3), 1)
+	t.Run("fully heals each other friendly creature and draws 2 when destroyed", func(t *testing.T) {
+		var duma, ally, d1, d2, enemy ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Sanctum,
+				InPlay: ct.Cards(
+					ct.Bind(&duma, DumaTheMartyr),
+					ct.Bind(&ally, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(4))),
+				),
+				Deck: ct.Cards(
+					ct.Bind(&d1, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(1))),
+					ct.Bind(&d2, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(1))),
+				),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&enemy, ct.Creature(ct.OfHouse(card.House.Sanctum), ct.Power(3)))),
+			},
+		})
+		ally.Damaged(2)
 
-	handBefore := len(g.Hand(0))
-	if err := g.Fight(0, duma, enemy); err != nil {
-		t.Fatalf("Fight: %v", err)
-	}
+		h.P1.Fight(duma, enemy)
 
-	if contains(g.Battleline(0), duma) {
-		t.Error("Duma (3 power) should die to 3 return damage")
-	}
-	if g.Damage(other) != 0 {
-		t.Errorf("ally damage = %d, want 0 (fully healed)", g.Damage(other))
-	}
-	if got := len(g.Hand(0)); got != handBefore+2 {
-		t.Errorf("hand = %d, want %d (drew 2)", got, handBefore+2)
-	}
+		h.Expect(duma).At(ct.Discard) // 3 power dies to 3 return damage
+		h.Expect(ally).Damage(0)      // fully healed
+		h.Expect(d1).At(ct.Hand)      // drew 2
+		h.Expect(d2).At(ct.Hand)
+	})
 }

@@ -18,6 +18,9 @@ var BurnTheStockpile = card.New(
 	card.WithAbility(
 		card.Trigger.Play, card.Conditional{
 			Cond: card.OpponentAemberAtLeast{Amount: 7},
-			Then: card.LoseAember{Player: card.Opponent, Amount: 4},
+			Then: card.LoseAember{
+				Player: card.Opponent,
+				Amount: 4,
+			},
 		}),
 )

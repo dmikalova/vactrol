@@ -3,26 +3,34 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Curiosity destroys each Scientist trait creature on Play, leaving other
-// creatures untouched.
+// Curiosity
+//
+//	House:  Untamed
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
+//	Play: Destroy each Scientist trait creature.
 func TestCuriosity(t *testing.T) {
-	g := cardtest.Started(t, engine.Untamed)
-	sci := g.AddToBattleline(engine.NewCard("sci", engine.Logos, engine.Creature, engine.Common, engine.WithPower(3), engine.WithTraits("Scientist")), 1)
-	beast := g.AddToBattleline(engine.NewCard("beast", engine.Untamed, engine.Creature, engine.Common, engine.WithPower(3), engine.WithTraits("Beast")), 1)
-	g.AddToHand(Curiosity, 0)
+	t.Run("destroys each Scientist trait creature and spares others", func(t *testing.T) {
+		var sci, beast ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Untamed, Hand: ct.Cards(Curiosity)},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&sci, ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(3), ct.Traits("Scientist"))),
+					ct.Bind(&beast, ct.Creature(ct.OfHouse(card.House.Untamed), ct.Power(3), ct.Traits("Beast"))),
+				),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
+		h.P1.Play(Curiosity)
 
-	if contains(g.Battleline(1), sci) {
-		t.Error("Scientist trait creature should be destroyed")
-	}
-	if !contains(g.Battleline(1), beast) {
-		t.Error("Beast trait creature should survive")
-	}
+		h.Expect(sci).At(ct.Discard)
+		h.Expect(beast).At(ct.PlayArea)
+	})
 }

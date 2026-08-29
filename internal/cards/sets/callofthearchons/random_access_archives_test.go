@@ -3,20 +3,31 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Random Access Archives archives the top card of the controller's deck.
+// Random Access Archives
+//
+//	House:  Logos
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
+//	Play: Archive the top card of your deck.
 func TestRandomAccessArchives(t *testing.T) {
-	g := cardtest.Started(t, engine.Logos)
-	top := g.AddToDeck(cardtest.Vanilla("Top", engine.Logos, 2), 0)
-	g.AddToHand(RandomAccessArchives, 0)
+	t.Run("archives the top card of the deck", func(t *testing.T) {
+		var top ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Logos,
+				Hand:  ct.Cards(RandomAccessArchives),
+				Deck:  ct.Cards(ct.Bind(&top, ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(2)))),
+			},
+		})
 
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if g.State.Archives[0].Count != 1 || g.State.Archives[0].IDs[0] != top {
-		t.Errorf("archives = %v, want the top deck card [%d]", g.State.Archives[0].IDs[:g.State.Archives[0].Count], top)
-	}
+		h.P1.Play(RandomAccessArchives)
+
+		h.Expect(top).At(ct.Archives)
+	})
 }

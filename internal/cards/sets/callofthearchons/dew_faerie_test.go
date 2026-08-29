@@ -3,21 +3,32 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Dew Faerie reaps for the usual 1 Æmber plus 1 more from its ability.
+// Dew Faerie
+//
+//	House:  Untamed
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  2
+//	Traits: Faerie
+//
+//	Elusive.
+//	Reap: Gain 1 Æmber.
 func TestDewFaerie(t *testing.T) {
-	g := cardtest.Started(t, engine.Untamed)
-	id := g.AddToBattleline(DewFaerie, 0)
-	if g.Power(id) != 2 {
-		t.Errorf("Dew Faerie power = %d, want 2", g.Power(id))
-	}
-	if err := g.Reap(0, id); err != nil {
-		t.Fatalf("Reap: %v", err)
-	}
-	if g.Aember(0) != 2 {
-		t.Errorf("Æmber after reap = %d, want 2 (1 reap + 1 ability)", g.Aember(0))
-	}
+	t.Run("reaps for the usual Æmber plus 1 more", func(t *testing.T) {
+		var faerie ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Untamed,
+				InPlay: ct.Cards(ct.Bind(&faerie, DewFaerie)),
+			},
+		})
+
+		h.Expect(faerie).Power(2)
+		h.P1.Reap(faerie)
+		h.P1.ExpectAmber(2) // 1 reap + 1 ability
+	})
 }

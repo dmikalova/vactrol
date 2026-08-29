@@ -5,6 +5,12 @@ import (
 	"math/rand"
 )
 
+// This file holds the Game object itself — the live match harness that bundles
+// the flat GameState with the read-only catalog and the surrounding services
+// (player names, choosers, RNG, log) — plus the chooser interfaces the engine
+// calls when an effect must make a decision. The Game's behaviors are spread
+// across the other game_*.go files (turn, play, combat, destruction, and so on).
+
 // Win/economy constants.
 const (
 	// KeyCost is the amount of Æmber required to forge one key.
@@ -20,7 +26,10 @@ const (
 // be reproduced from a seed.
 type Chooser interface {
 	// ChooseCreature returns one id from candidates and true, or false if none.
-	ChooseCreature(prompt string, candidates []LocalID) (LocalID, bool)
+	// source is the name of the card whose ability is asking (for prompt
+	// attribution), or "" when the choice has no card source such as an ordering
+	// or turn-structure prompt.
+	ChooseCreature(source, prompt string, candidates []LocalID) (LocalID, bool)
 }
 
 // FirstChooser always picks the first available candidate. It is the default and
@@ -28,7 +37,7 @@ type Chooser interface {
 type FirstChooser struct{}
 
 // ChooseCreature returns the first candidate, or false if the list is empty.
-func (FirstChooser) ChooseCreature(_ string, candidates []LocalID) (LocalID, bool) {
+func (FirstChooser) ChooseCreature(_, _ string, candidates []LocalID) (LocalID, bool) {
 	if len(candidates) == 0 {
 		return 0, false
 	}
@@ -39,7 +48,15 @@ func (FirstChooser) ChooseCreature(_ string, candidates []LocalID) (LocalID, boo
 // labeled options, for "choose one" effects. Choosers that do not implement it
 // default to the first option.
 type OptionChooser interface {
-	ChooseOption(prompt string, options []string) int
+	ChooseOption(source, prompt string, options []string) int
+}
+
+// Orderer is an optional Chooser capability: arranging ids into a resolution
+// order in a single call, instead of being asked to pick the next id repeatedly.
+// A Chooser that implements it takes full control of ordering (see
+// Game.orderByChoice); one that does not falls back to repeated ChooseCreature.
+type Orderer interface {
+	OrderCreatures(source, prompt string, ids []LocalID) []LocalID
 }
 
 // Game bundles the flat GameState with the read-only Catalog and the surrounding
@@ -91,6 +108,17 @@ func (g *Game) chooserFor(player int) Chooser {
 	return FirstChooser{}
 }
 
+// pickCreature resolves a "choose one creature" prompt. When only one candidate
+// is available the choice is forced, so it is taken automatically without
+// consulting the chooser; otherwise the player's chooser decides (and may
+// decline). Callers guard the empty case before calling.
+func (g *Game) pickCreature(player int, source, prompt string, candidates []LocalID) (LocalID, bool) {
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+	return g.chooserFor(player).ChooseCreature(source, prompt, candidates)
+}
+
 // orderByChoice asks controller to arrange ids into a resolution order by picking
 // the next one repeatedly (the final id is forced, so it is never prompted). With
 // 0 or 1 ids there is nothing to order and ids is returned unchanged; a rejected
@@ -100,10 +128,13 @@ func (g *Game) orderByChoice(controller int, prompt string, ids []LocalID) []Loc
 	if len(ids) <= 1 {
 		return ids
 	}
+	if o, ok := g.chooserFor(controller).(Orderer); ok {
+		return o.OrderCreatures("", prompt, ids)
+	}
 	remaining := append([]LocalID(nil), ids...)
 	ordered := make([]LocalID, 0, len(ids))
 	for len(remaining) > 1 {
-		chosen, ok := g.chooserFor(controller).ChooseCreature(prompt, remaining)
+		chosen, ok := g.chooserFor(controller).ChooseCreature("", prompt, remaining)
 		if !ok {
 			break
 		}
@@ -116,192 +147,4 @@ func (g *Game) orderByChoice(controller int, prompt string, ids []LocalID) []Loc
 		}
 	}
 	return append(ordered, remaining...)
-}
-
-// ---- registration & setup ----
-
-// Register adds a definition to the catalog for an owner and returns its id.
-func (g *Game) Register(def CardDefinition, owner int) LocalID {
-	d := def
-	return g.cat.add(&d, owner)
-}
-
-// AddToHand registers a card and places it in a player's hand.
-func (g *Game) AddToHand(def CardDefinition, owner int) LocalID {
-	id := g.Register(def, owner)
-	g.State.Hand[owner].add(id)
-	return id
-}
-
-// AddToDeck registers a card and places it on the bottom of a player's deck.
-func (g *Game) AddToDeck(def CardDefinition, owner int) LocalID {
-	id := g.Register(def, owner)
-	g.State.Deck[owner].add(id)
-	return id
-}
-
-// AddToBattleline registers a creature and places it on a player's battleline.
-func (g *Game) AddToBattleline(def CardDefinition, owner int) LocalID {
-	id := g.Register(def, owner)
-	g.State.Cards[id].ArmorRemaining = int16(def.Armor)
-	g.State.Battleline[owner].add(id)
-	return id
-}
-
-// AddArtifact registers an artifact and places it in a player's artifact row.
-func (g *Game) AddArtifact(def CardDefinition, owner int) LocalID {
-	id := g.Register(def, owner)
-	g.State.Artifacts[owner].add(id)
-	return id
-}
-
-// Shuffle randomizes a player's deck using the game's seeded RNG.
-func (g *Game) Shuffle(player int) {
-	d := &g.State.Deck[player]
-	for i := int(d.Count) - 1; i > 0; i-- {
-		j := g.rng.Intn(i + 1)
-		d.IDs[i], d.IDs[j] = d.IDs[j], d.IDs[i]
-	}
-}
-
-// ---- read accessors (used by callers, effects, and tests) ----
-
-// Def returns the read-only definition for an id.
-func (g *Game) Def(id LocalID) *CardDefinition { return g.cat.def(id) }
-
-// owner returns the owning player index for an id.
-func (g *Game) owner(id LocalID) int { return g.cat.owner(id) }
-
-// Name returns a card's printed name.
-func (g *Game) Name(id LocalID) string { return g.cat.def(id).Name }
-
-// Power returns a creature's current power including attached upgrades.
-func (g *Game) Power(id LocalID) int {
-	core := &g.State.Cards[id]
-	p := g.cat.def(id).Power
-	for i := 0; i < int(core.UpgradeCount); i++ {
-		p += g.cat.def(core.Upgrades[i]).Static.PowerBonus
-	}
-	return p
-}
-
-// armor returns a creature's armor value including attached upgrades.
-func (g *Game) armor(id LocalID) int {
-	core := &g.State.Cards[id]
-	a := g.cat.def(id).Armor
-	for i := 0; i < int(core.UpgradeCount); i++ {
-		a += g.cat.def(core.Upgrades[i]).Static.ArmorBonus
-	}
-	return a
-}
-
-// assault returns a creature's Assault value including attached upgrades.
-func (g *Game) assault(id LocalID) int {
-	core := &g.State.Cards[id]
-	a := g.cat.def(id).Assault
-	for i := 0; i < int(core.UpgradeCount); i++ {
-		a += g.cat.def(core.Upgrades[i]).Static.AssaultBonus
-	}
-	return a
-}
-
-// hazardous returns a creature's Hazardous value including attached upgrades.
-func (g *Game) hazardous(id LocalID) int {
-	core := &g.State.Cards[id]
-	h := g.cat.def(id).Hazardous
-	for i := 0; i < int(core.UpgradeCount); i++ {
-		h += g.cat.def(core.Upgrades[i]).Static.HazardousBonus
-	}
-	return h
-}
-
-// hasKeyword reports whether a creature has a keyword, either printed on it or
-// granted by an attached upgrade.
-func (g *Game) hasKeyword(id LocalID, k Keyword) bool {
-	if g.cat.def(id).hasKeyword(k) {
-		return true
-	}
-	core := &g.State.Cards[id]
-	for i := 0; i < int(core.UpgradeCount); i++ {
-		for _, kw := range g.cat.def(core.Upgrades[i]).Static.Keywords {
-			if kw == k {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Damage returns the damage currently on a creature.
-func (g *Game) Damage(id LocalID) int { return int(g.State.Cards[id].Damage) }
-
-// AmberOn returns the Æmber sitting on a card (placed by exalt, capture, etc.).
-func (g *Game) AmberOn(id LocalID) int { return int(g.State.Cards[id].Amber) }
-
-// Exhausted reports whether a card is exhausted.
-func (g *Game) Exhausted(id LocalID) bool { return g.State.Cards[id].Exhausted }
-
-// Aember returns a player's Æmber pool.
-func (g *Game) Aember(player int) int { return g.State.Aember[player] }
-
-// Keys returns a player's forged key count.
-func (g *Game) Keys(player int) int { return g.State.Keys[player] }
-
-// Winner returns the winning player index, or -1 if the game is ongoing.
-func (g *Game) Winner() int { return g.State.Winner }
-
-// Hand returns a copy of the ids in a player's hand.
-func (g *Game) Hand(player int) []LocalID { return cloneIDs(g.State.Hand[player].slice()) }
-
-// Battleline returns a copy of the ids on a player's battleline.
-func (g *Game) Battleline(player int) []LocalID {
-	return cloneIDs(g.State.Battleline[player].slice())
-}
-
-// Discard returns a copy of the ids in a player's discard pile.
-func (g *Game) Discard(player int) []LocalID { return cloneIDs(g.State.Discard[player].slice()) }
-
-// Archives returns a copy of the ids in a player's archives.
-func (g *Game) Archives(player int) []LocalID { return cloneIDs(g.State.Archives[player].slice()) }
-
-// Artifacts returns a copy of the ids in a player's artifact row.
-func (g *Game) Artifacts(player int) []LocalID { return cloneIDs(g.State.Artifacts[player].slice()) }
-
-// Upgrades returns the ids of upgrades attached to a creature, in attach order.
-func (g *Game) Upgrades(id LocalID) []LocalID {
-	core := &g.State.Cards[id]
-	out := make([]LocalID, core.UpgradeCount)
-	for i := range out {
-		out[i] = core.Upgrades[i]
-	}
-	return out
-}
-
-// inPlay reports whether an id is on its owner's battleline or artifact row.
-func (g *Game) inPlay(id LocalID) bool {
-	o := g.owner(id)
-	return g.State.Battleline[o].contains(id) || g.State.Artifacts[o].contains(id)
-}
-
-// battlelineCopy returns a fresh slice of a player's battleline ids, safe to hold
-// across state mutations (e.g. while dealing damage to each creature).
-func (g *Game) battlelineCopy(player int) []LocalID {
-	return cloneIDs(g.State.Battleline[player].slice())
-}
-
-// allInPlay returns a fresh slice of a player's creatures and artifacts.
-func (g *Game) allInPlay(player int) []LocalID {
-	b := g.State.Battleline[player].slice()
-	a := g.State.Artifacts[player].slice()
-	out := make([]LocalID, 0, len(b)+len(a))
-	out = append(out, b...)
-	out = append(out, a...)
-	return out
-}
-
-// cloneIDs copies a slice of ids so callers cannot alias the state arrays.
-func cloneIDs(src []LocalID) []LocalID {
-	out := make([]LocalID, len(src))
-	copy(out, src)
-	return out
 }

@@ -3,38 +3,40 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Ghostly Hand always yields its 2 Æmber bonus and, when the opponent holds
-// exactly 1 Æmber, steals it for a third.
+// Ghostly Hand
+//
+//	House:  Shadows
+//	Type:   Action
+//	Rarity: Common
+//	Æmber:  2
+//
+//	Play: If your opponent has exactly 1 Æmber, steal 1 Æmber.
 func TestGhostlyHand(t *testing.T) {
-	// Condition met: opponent at exactly 1 — bonus 2 plus 1 stolen makes 3.
-	g := cardtest.Started(t, engine.Shadows)
-	g.State.Aember[1] = 1
-	g.AddToHand(GhostlyHand, 0)
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if g.Aember(0) != 3 {
-		t.Errorf("controller Æmber = %d, want 3", g.Aember(0))
-	}
-	if g.Aember(1) != 0 {
-		t.Errorf("opponent Æmber = %d, want 0", g.Aember(1))
-	}
+	t.Run("gains its bonus and steals 1 at exactly 1 opponent Æmber", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Shadows, Hand: ct.Cards(GhostlyHand)},
+			P2: ct.Side{Amber: 1},
+		})
 
-	// Condition not met: opponent at 2 — only the 2 Æmber bonus applies.
-	g = cardtest.Started(t, engine.Shadows)
-	g.State.Aember[1] = 2
-	g.AddToHand(GhostlyHand, 0)
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
-	if g.Aember(0) != 2 {
-		t.Errorf("controller Æmber = %d, want 2", g.Aember(0))
-	}
-	if g.Aember(1) != 2 {
-		t.Errorf("opponent Æmber = %d, want 2", g.Aember(1))
-	}
+		h.P1.Play(GhostlyHand)
+
+		h.P1.ExpectAmber(3) // 2 bonus + 1 stolen
+		h.P2.ExpectAmber(0)
+	})
+
+	t.Run("only gains its bonus when the opponent is not at exactly 1", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Shadows, Hand: ct.Cards(GhostlyHand)},
+			P2: ct.Side{Amber: 2},
+		})
+
+		h.P1.Play(GhostlyHand)
+
+		h.P1.ExpectAmber(2)
+		h.P2.ExpectAmber(2)
+	})
 }

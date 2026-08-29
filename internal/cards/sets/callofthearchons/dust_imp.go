@@ -20,5 +20,8 @@ var DustImp = card.New(
 	card.WithPower(2),
 	card.WithTraits("Imp"),
 	card.WithAbility(
-		card.Trigger.Destroyed, card.GainAember{Amount: 2}),
+		card.Trigger.Destroyed, card.GainAember{
+			Player: card.Controller,
+			Amount: 2,
+		}),
 )

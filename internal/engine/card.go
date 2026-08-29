@@ -31,6 +31,15 @@ type CardDefinition struct {
 	//
 	//rulebook:keyword Hazardous
 	Hazardous int
+	// AttackDamage customizes the damage this creature deals when it fights, for the
+	// few creatures whose fight damage is not simply their current power (Valdr's
+	// flank bonus, Ether Spider dealing none). The zero value deals its power.
+	AttackDamage AttackDamage
+
+	// FightRestriction, when set, limits which enemy creatures this creature may
+	// fight to those its Target allows (Bigtwig can only fight stunned creatures).
+	// The zero Target imposes no restriction.
+	FightRestriction Target
 
 	// AemberBonus is the number of Æmber "pips" printed on the card; the
 	// controller gains this much Æmber when the card is played.
@@ -39,8 +48,95 @@ type CardDefinition struct {
 	// Static is a continuous modifier an Upgrade applies to its host creature.
 	Static StaticModifier
 
+	// Constant is a constant ability this card applies to creatures in play for as
+	// long as it stays in play (see Game.constantBonus). Unlike Static (an Upgrade
+	// buffing its own host), a constant ability reaches a whole Target of creatures.
+	Constant ConstantAbility
+
+	// Restricts holds the continuous "cannot" rules the card imposes on its
+	// controller while it is in play (e.g. Grommid's "You cannot play creatures").
+	Restricts Restrictions
+
+	// KeyCostChange is a continuous change this card, while in play, makes to key
+	// cost — who it affects and by how much (e.g. Grabber Jammer's "Your opponent's
+	// keys cost +1 Æmber"). The zero value changes nothing.
+	KeyCostChange KeyCostChange
+
 	// Abilities are the triggered abilities on the card.
 	Abilities []Ability
+}
+
+// Restrictions are the continuous "cannot" rules a card imposes while it stays in
+// play. They are consulted by the matching gate (Game.cannotFight,
+// Game.cannotPlayCreatures, Game.cannotPlayCard) alongside any timed restriction.
+type Restrictions struct {
+	// Fighting bars the controller from using creatures to fight.
+	Fighting bool
+	// CannotPlay bars the controller from playing cards of this type (e.g. Creature
+	// for Grommid's "You cannot play creatures"). The zero value (an unset CardType)
+	// imposes no play restriction.
+	CannotPlay CardType
+	// PlayCardLimit caps cards a relative player may play each turn (Ember Imp's
+	// "your opponent cannot play more than 2 cards each turn"). Its zero value
+	// imposes no limit.
+	PlayCardLimit PlayCardLimit
+}
+
+// PlayCardLimit caps how many cards Player may play in a turn while its source
+// card remains in play. Player is relative to the source card's controller, so
+// Controller, Opponent, and EachPlayer compose naturally. Amount zero means no
+// limit.
+type PlayCardLimit struct {
+	Player Player
+	Amount int
+}
+
+// affects reports whether the limit on a card owned by controller applies to
+// target.
+func (l PlayCardLimit) affects(controller, target int) bool {
+	switch l.Player {
+	case Controller:
+		return target == controller
+	case Opponent:
+		return target != controller
+	case EachPlayer:
+		return true
+	default:
+		return false
+	}
+}
+
+// KeyCostChange is a continuous change to the cost of forging a key that a card in
+// play imposes while it stays in play. Build it with NewKeyCostChange: the
+// affected player is a required argument, so authors state whose keys change
+// (Controller, Opponent, or EachPlayer) rather than lean on a zero-value default —
+// an unset player would be indistinguishable from Controller. The zero value
+// (which NewKeyCostChange never produces) changes nothing. (A Duration will later
+// bound how long the change lasts; today every key-cost change is continuous.)
+type KeyCostChange struct {
+	amount int
+	player Player
+}
+
+// NewKeyCostChange builds a key-cost change of amount Æmber on the keys of player —
+// one of Controller, Opponent, or EachPlayer. The player is mandatory: there is no
+// default, so a key-cost change cannot be constructed without stating whose keys
+// it changes (omitting it is a compile error at the call site).
+func NewKeyCostChange(player Player, amount int) KeyCostChange {
+	return KeyCostChange{amount: amount, player: player}
+}
+
+// affects reports whether a change on a card owned by owner applies to the key
+// cost of target.
+func (kc KeyCostChange) affects(owner, target int) bool {
+	switch kc.player {
+	case Opponent:
+		return target == 1-owner
+	case EachPlayer:
+		return true
+	default: // Controller
+		return target == owner
+	}
 }
 
 // StaticModifier is a continuous change applied by an Upgrade to the creature it
@@ -58,6 +154,36 @@ type StaticModifier struct {
 	// Keywords are keywords the Upgrade grants its host creature; the host has
 	// them in addition to its own (see Game.hasKeyword).
 	Keywords []Keyword
+
+	// KeyCostChange is a key-cost change an Upgrade grants its host; while attached
+	// the host imposes it (e.g. "Your opponent's keys cost +2 Æmber").
+	KeyCostChange KeyCostChange
+}
+
+// ConstantAbility is a continuous stat modifier a card in play applies to
+// creatures — "Each friendly creature gains +1 power" — lasting only while the
+// source card remains in play. It reuses Target to say which cards it reaches,
+// evaluated from the source card's point of view. An unset Target (the zero
+// value) reaches every card in play — creatures and artifacts, the source
+// included.
+type ConstantAbility struct {
+	PowerBonus int
+	ArmorBonus int
+	Target     Target
+	// Granted are triggered abilities the card grants to every creature its Target
+	// reaches, for as long as the card stays in play — Annihilation Ritual grants
+	// each creature a "Destroyed: purge this creature." The reached creatures fire
+	// them as if printed on them (see Game.triggerAbilities).
+	Granted []Ability
+}
+
+// target returns the constant ability's effective Target: an unset Target reaches
+// every card in play (creatures and artifacts, including the source).
+func (c ConstantAbility) target() Target {
+	if c.Target == (Target{}) {
+		return Target{Kind: TargetEachInPlay}
+	}
+	return c.Target
 }
 
 // Ability pairs a trigger with the effect that resolves when it fires.
@@ -113,6 +239,9 @@ func NewCard(name string, house House, ct CardType, rarity Rarity, opts ...CardO
 		opt(&c)
 	}
 	for _, ab := range c.Abilities {
+		if !ab.Trigger.valid() {
+			panic(fmt.Sprintf("card %q: an ability has no trigger set", name))
+		}
 		if err := validateEffect(ab.Effect); err != nil {
 			panic(fmt.Sprintf("card %q: %v", name, err))
 		}
@@ -144,11 +273,55 @@ func WithAssault(n int) CardOption { return func(c *CardDefinition) { c.Assault 
 // N damage before fight damage.
 func WithHazardous(n int) CardOption { return func(c *CardDefinition) { c.Hazardous = n } }
 
+// AttackDamage customizes the damage a creature deals when it fights. The zero
+// value leaves fight damage equal to the creature's power; the fields override or
+// adjust it for the handful of creatures that need it.
+type AttackDamage struct {
+	// Amount is the number. When Fixed it is the whole fight damage, replacing the
+	// creature's power (Ether Spider deals 0); otherwise it is a bonus added to the
+	// creature's power (Valdr's +2).
+	Amount int
+	// Fixed deals Amount as the entire fight damage instead of adding it to power.
+	Fixed bool
+	// FlankOnly limits a bonus (a non-Fixed Amount) to attacks on a defender that is
+	// on a flank (Valdr). It does not restrict a Fixed amount.
+	FlankOnly bool
+}
+
+// WithAttackDamage customizes the damage a creature deals when it fights.
+func WithAttackDamage(ad AttackDamage) CardOption {
+	return func(c *CardDefinition) { c.AttackDamage = ad }
+}
+
+// WithFightRestriction limits which creatures a creature may fight to those the
+// Target allows (e.g. card-level "can only fight stunned creatures").
+func WithFightRestriction(t Target) CardOption {
+	return func(c *CardDefinition) { c.FightRestriction = t }
+}
+
 // WithAemberBonus sets the number of Æmber pips on the card.
 func WithAemberBonus(n int) CardOption { return func(c *CardDefinition) { c.AemberBonus = n } }
 
 // WithStatic sets the continuous modifier an Upgrade applies to its host.
 func WithStatic(m StaticModifier) CardOption { return func(c *CardDefinition) { c.Static = m } }
+
+// WithConstantAbility sets the constant ability this card applies to creatures
+// while it is in play.
+func WithConstantAbility(c ConstantAbility) CardOption {
+	return func(d *CardDefinition) { d.Constant = c }
+}
+
+// WithRestrictions sets the continuous "cannot" rules a card imposes on its
+// controller while it is in play.
+func WithRestrictions(r Restrictions) CardOption {
+	return func(c *CardDefinition) { c.Restricts = r }
+}
+
+// WithKeyCost makes the card, while in play, impose the given key-cost change (who
+// it affects and by how much).
+func WithKeyCost(kc KeyCostChange) CardOption {
+	return func(c *CardDefinition) { c.KeyCostChange = kc }
+}
 
 // WithAbility appends a triggered ability to the card.
 func WithAbility(trigger Trigger, effect Effect) CardOption {

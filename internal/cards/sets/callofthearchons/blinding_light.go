@@ -9,7 +9,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Rarity: Common
 //	Æmber:  1
 //
-//	Play: Choose a house, then stun each creature of the chosen house.
+//	Play: Choose a house - stun each creature of the chosen house.
 var BlindingLight = card.New(
 	"Blinding Light",
 	card.House.Sanctum,
@@ -17,7 +17,8 @@ var BlindingLight = card.New(
 	card.Rarity.Common,
 	card.Provenance(card.CotA, 213),
 	card.WithAemberBonus(1),
-	card.WithAbility(card.Trigger.Play, card.ChooseHouseThen{
-		Then: card.Stun{Target: card.Target.EachCreature.OfChosenHouse()},
-	}),
+	card.WithAbility(
+		card.Trigger.Play, card.ChooseHouseThen{
+			Then: card.Stun{Target: card.Target.EachCreature.OfChosenHouse()},
+		}),
 )

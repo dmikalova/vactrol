@@ -3,25 +3,36 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Brain Eater draws a card after a creature is destroyed fighting it.
+// Brain Eater
+//
+//	House:  Logos
+//	Type:   Creature
+//	Rarity: Uncommon
+//	Power:  6
+//	Traits: Cyborg • Beast
+//
+//	After a creature is destroyed fighting Brain Eater, draw a card.
 func TestBrainEater(t *testing.T) {
-	g := cardtest.Started(t, engine.Logos)
-	g.AddToDeck(cardtest.Vanilla("d", engine.Logos, 1), 0)
-	eater := g.AddToBattleline(BrainEater, 0)
-	prey := g.AddToBattleline(cardtest.Vanilla("Prey", engine.Mars, 1), 1)
+	t.Run("draws a card after a creature is destroyed fighting it", func(t *testing.T) {
+		var prey, drawn ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Logos,
+				InPlay: ct.Cards(BrainEater),
+				Deck:   ct.Cards(ct.Bind(&drawn, ct.Creature(ct.OfHouse(card.House.Logos), ct.Power(1)))),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&prey, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(1)))),
+			},
+		})
 
-	before := len(g.Hand(0))
-	if err := g.Fight(0, eater, prey); err != nil {
-		t.Fatalf("Fight: %v", err)
-	}
-	if len(g.Battleline(1)) != 0 {
-		t.Error("the 1-power prey should be destroyed")
-	}
-	if got := len(g.Hand(0)); got != before+1 {
-		t.Errorf("hand = %d, want %d (drew a card)", got, before+1)
-	}
+		h.P1.Fight(BrainEater, prey)
+
+		h.Expect(prey).At(ct.Discard) // the 1-power prey is destroyed
+		h.Expect(drawn).At(ct.Hand)   // Brain Eater draws a card
+	})
 }

@@ -1,0 +1,198 @@
+package engine
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Purge sets cards aside out of the game, taken from a zone the controller picks.
+// It serves both as a standalone effect (Creeping Oblivion purges up to 2 cards)
+// and as the first half of a Then ("purge a creature -> give a +1 power counter"),
+// so it reports whether it purged anything.
+type Purge struct {
+	// Zone is the zone the purge pulls from. It has no default: a Purge must name
+	// where it purges from. Only the discard zone is supported today.
+	Zone Zone
+	// Type restricts the purge to cards of this type; the zero value allows any.
+	Type CardType
+	// Count is how many cards to purge; the zero value counts as one, so a bare
+	// Purge reads as "purge a card".
+	Count int
+	// UpTo lets the controller purge fewer than Count, down to none (Creeping
+	// Oblivion's "up to 2"). Without it they purge Count when that many match.
+	UpTo bool
+}
+
+// validate rejects a Purge that does not name the zone it pulls from.
+func (e Purge) validate() error {
+	if !e.Zone.valid() {
+		return fmt.Errorf("Purge: zone must be set")
+	}
+	return nil
+}
+
+// count is Count with the zero value treated as one.
+func (e Purge) count() int {
+	if e.Count < 1 {
+		return 1
+	}
+	return e.Count
+}
+
+// noun renders the kind of card purged: the lowercased type when set, else "card".
+func (e Purge) noun() string {
+	if e.Type != "" {
+		return strings.ToLower(string(e.Type))
+	}
+	return "card"
+}
+
+// Text renders the effect, e.g. "purge a creature from a discard zone" or "purge
+// up to 2 cards from a discard zone".
+func (e Purge) Text() string {
+	switch {
+	case e.UpTo:
+		return fmt.Sprintf("purge up to %d %ss from a discard zone", e.count(), e.noun())
+	case e.count() == 1:
+		return "purge a " + e.noun() + " from a discard zone"
+	default:
+		return fmt.Sprintf("purge %d %ss from a discard zone", e.count(), e.noun())
+	}
+}
+
+// Resolve purges the cards, ignoring the report used when Purge gates a Then.
+func (e Purge) Resolve(ctx *EffectContext) { e.resolveGate(ctx) }
+
+// resolveGate purges up to count matching cards from one discard zone the
+// controller picks — the cards one at a time, with a "Done" opt-out when UpTo —
+// and reports whether any card was purged.
+func (e Purge) resolveGate(ctx *EffectContext) bool {
+	matches := func(id LocalID) bool {
+		return e.Type == "" || ctx.Resolver.TypeOf(id) == e.Type
+	}
+	// The discard zones holding at least one matching card.
+	var zones []int
+	for _, p := range []int{ctx.Controller, ctx.Opponent()} {
+		for _, id := range ctx.Resolver.Discard(p) {
+			if matches(id) {
+				zones = append(zones, p)
+				break
+			}
+		}
+	}
+	if len(zones) == 0 {
+		return false
+	}
+	zone := zones[0]
+	if len(zones) == 2 {
+		zone = zones[ctx.ChooseOption("Choose a discard zone to purge from",
+			[]string{"your discard zone", "your opponent's discard zone"})]
+	}
+	purged := 0
+	for i := 0; i < e.count(); i++ {
+		var cands []LocalID
+		for _, id := range ctx.Resolver.Discard(zone) {
+			if matches(id) {
+				cands = append(cands, id)
+			}
+		}
+		if len(cands) == 0 {
+			break
+		}
+		options := make([]string, len(cands))
+		for j, id := range cands {
+			options[j] = ctx.Resolver.Name(id)
+		}
+		if e.UpTo {
+			options = append(options, "Done")
+		}
+		choice := ctx.ChooseOption("Choose a card to purge", options)
+		if choice >= len(cands) {
+			break
+		}
+		ctx.Resolver.PurgeFromDiscard(zone, cands[choice])
+		purged++
+	}
+	return purged > 0
+}
+
+// PurgeFromHand lets the controller choose and purge one card from a player's
+// hand, optionally restricted to a house — the "you may choose and purge a
+// Sanctum card" of Imperial Traitor. It is a "may": the controller can always
+// decline, so nothing is purged when they pass or no card matches.
+type PurgeFromHand struct {
+	// Player whose hand the card is purged from.
+	Player Player
+	// House restricts the choice to cards of this house; HouseNone allows any card.
+	House House
+}
+
+// validate rejects a PurgeFromHand whose player was left unset.
+func (e PurgeFromHand) validate() error {
+	if !e.Player.valid() {
+		return errUnsetPlayer("PurgeFromHand")
+	}
+	return nil
+}
+
+// noun renders the kind of card purged: the house-qualified card when House is
+// set (e.g. "Sanctum card"), else the generic "card".
+func (e PurgeFromHand) noun() string {
+	if e.House != HouseNone {
+		return e.House.String() + " card"
+	}
+	return "card"
+}
+
+// Text renders the effect, e.g. "you may purge a Sanctum card from your
+// opponent's hand".
+func (e PurgeFromHand) Text() string {
+	whose := "your hand"
+	if e.Player == Opponent {
+		whose = "your opponent's hand"
+	}
+	return "you may purge a " + e.noun() + " from " + whose
+}
+
+// Resolve offers the matching cards in the player's hand plus a "Done" pass, then
+// purges the chosen one. It does nothing when no card matches or the controller
+// declines.
+func (e PurgeFromHand) Resolve(ctx *EffectContext) {
+	owner := ctx.PlayerFor(e.Player)
+	var cands []LocalID
+	for _, id := range ctx.Resolver.Hand(owner) {
+		if e.House == HouseNone || ctx.Resolver.House(id) == e.House {
+			cands = append(cands, id)
+		}
+	}
+	if len(cands) == 0 {
+		return
+	}
+	options := make([]string, len(cands)+1)
+	for i, id := range cands {
+		options[i] = ctx.Resolver.Name(id)
+	}
+	options[len(cands)] = "Done"
+	choice := ctx.ChooseOption("Choose a card to purge", options)
+	if choice >= len(cands) {
+		return
+	}
+	ctx.Resolver.PurgeFromHand(owner, cands[choice])
+}
+
+// PurgeCreature purges each creature its Target selects from play into its owner's
+// purge zone — the "purge this creature" a card gains (Annihilation Ritual grants
+// it to every creature as a Destroyed ability).
+type PurgeCreature struct {
+	Target Target
+}
+
+// Text renders the effect, e.g. "purge this creature".
+func (e PurgeCreature) Text() string { return "purge " + e.Target.Text() }
+
+// Resolve purges each selected creature from play.
+func (e PurgeCreature) Resolve(ctx *EffectContext) {
+	for _, id := range e.Target.Select(ctx) {
+		ctx.Resolver.PurgeFromPlay(id)
+	}
+}

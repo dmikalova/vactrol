@@ -6,21 +6,96 @@ func TestEffectValidation(t *testing.T) {
 	bad := Heal{Fully: true, Amount: 1, Target: Target{Kind: TargetThisCreature}}
 	good := Heal{Fully: true, Target: Target{Kind: TargetThisCreature}}
 
-	if err := validateEffect(GainAember{Amount: 1}); err != nil {
+	if err := validateEffect(GainAember{Player: Controller, Amount: 1}); err != nil {
 		t.Errorf("non-validating effect should be nil, got %v", err)
 	}
 	if err := (Sequence{Effects: []Effect{good, bad}}).validate(); err == nil {
 		t.Error("sequence should surface a bad child")
 	}
-	if err := (Sequence{Effects: []Effect{good, GainAember{Amount: 1}}}).validate(); err != nil {
+	if err := (Sequence{Effects: []Effect{good, GainAember{Player: Controller, Amount: 1}}}).validate(); err != nil {
 		t.Errorf("sequence of valid effects should pass, got %v", err)
 	}
 	if err := (Conditional{Then: bad}).validate(); err == nil {
 		t.Error("conditional should surface a bad gated effect")
 	}
-	if err := (Conditional{Then: GainAember{Amount: 1}}).validate(); err != nil {
+	if err := (Conditional{Then: GainAember{Player: Controller, Amount: 1}}).validate(); err != nil {
 		t.Errorf("conditional with a valid effect should pass, got %v", err)
 	}
+	if err := validateEffect(ReturnFromDiscard{Destination: ToBottomOfDeck}); err == nil {
+		t.Error("ReturnFromDiscard to an unsupported destination should be rejected")
+	}
+	if err := validateEffect(ReturnFromDiscard{Destination: ToTopOfDeck}); err != nil {
+		t.Errorf("ReturnFromDiscard to the top of the deck should pass, got %v", err)
+	}
+	// Purge must name the zone it pulls from.
+	if err := validateEffect(Purge{}); err == nil {
+		t.Error("a Purge with no zone should be rejected")
+	}
+	if err := validateEffect(Purge{Zone: Discard, Type: Creature}); err != nil {
+		t.Errorf("a Purge naming its zone should pass, got %v", err)
+	}
+	// A result gate surfaces a bad first action or a bad follow-up.
+	if err := validateEffect(Then{First: Purge{}, Result: AddPowerCounter{Target: Target{Kind: TargetThisCreature}, Amount: 1}}); err == nil {
+		t.Error("result gate should surface a bad first action")
+	}
+	if err := validateEffect(Then{First: Purge{Zone: Discard}, Result: bad}); err == nil {
+		t.Error("result gate should surface a bad follow-up")
+	}
+	if err := validateEffect(Then{First: Purge{Zone: Discard, Type: Creature}, Result: AddPowerCounter{Target: Target{Kind: TargetThisCreature}, Amount: 1}}); err != nil {
+		t.Errorf("result gate with valid halves should pass, got %v", err)
+	}
+}
+
+func TestRequiredTargetValidation(t *testing.T) {
+	// Player-taking effects reject an unset player and accept an explicit one.
+	cases := []struct {
+		name       string
+		unset, set Effect
+	}{
+		{"GainAember", GainAember{Amount: 1}, GainAember{Player: Controller, Amount: 1}},
+		{"LoseAember", LoseAember{Amount: 1}, LoseAember{Player: Controller, Amount: 1}},
+		{"DiscardArchives", DiscardArchives{}, DiscardArchives{Player: Controller}},
+		{"DiscardHand", DiscardHand{}, DiscardHand{Player: Controller}},
+		{"Reveal", Reveal{}, Reveal{Player: Controller}},
+	}
+	for _, tc := range cases {
+		if err := validateEffect(tc.unset); err == nil {
+			t.Errorf("%s with an unset player should be rejected", tc.name)
+		}
+		if err := validateEffect(tc.set); err != nil {
+			t.Errorf("%s with a player set should pass, got %v", tc.name, err)
+		}
+	}
+
+	// CannotFight needs both a player and a duration.
+	if err := validateEffect(CannotFight{Duration: NextTurn}); err == nil {
+		t.Error("CannotFight with an unset player should be rejected")
+	}
+	if err := validateEffect(CannotFight{Player: Opponent}); err == nil {
+		t.Error("CannotFight with an unset duration should be rejected")
+	}
+	if err := validateEffect(CannotFight{Player: Opponent, Duration: NextTurn}); err != nil {
+		t.Errorf("CannotFight fully set should pass, got %v", err)
+	}
+}
+
+func TestPlayerForRejectsUnsetPlayer(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("PlayerFor(playerUnset) should panic")
+		}
+	}()
+	(&EffectContext{Controller: 0}).PlayerFor(playerUnset)
+}
+
+func TestNewCardRejectsUnsetTrigger(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("NewCard should reject an ability whose trigger is unset")
+		}
+	}()
+	NewCard("Bad", Brobnar, Action, Common,
+		WithAbility(triggerUnset, GainAember{Player: Controller, Amount: 1}))
 }
 
 func TestNewCardRejectsConflictingHeal(t *testing.T) {

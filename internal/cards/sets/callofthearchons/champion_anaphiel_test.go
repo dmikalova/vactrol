@@ -3,30 +3,38 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Champion Anaphiel is a 6-power Knight with Taunt, protecting its smaller
-// neighbors from being fought directly.
+// Champion Anaphiel
+//
+//	House:  Sanctum
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  6
+//	Armor:  1
+//	Traits: Knight • Spirit
+//
+//	Taunt.
 func TestChampionAnaphiel(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	g.AddToHand(ChampionAnaphiel, 0)
-	id, err := g.PlayCreature(0, 0, false)
-	if err != nil {
-		t.Fatalf("PlayCreature: %v", err)
-	}
-	if g.Power(id) != 6 {
-		t.Errorf("Champion Anaphiel power = %d, want 6", g.Power(id))
-	}
+	t.Run("is a 6-power creature with Taunt", func(t *testing.T) {
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Sanctum, Hand: ct.Cards(ChampionAnaphiel)},
+		})
 
-	hasTaunt := false
-	for _, kw := range ChampionAnaphiel.Keywords {
-		if kw == engine.Taunt {
-			hasTaunt = true
+		h.P1.Play(ChampionAnaphiel)
+
+		h.Expect(ChampionAnaphiel).Power(6).At(ct.PlayArea)
+
+		hasTaunt := false
+		for _, kw := range ChampionAnaphiel.Keywords {
+			if kw == card.Keyword.Taunt {
+				hasTaunt = true
+			}
 		}
-	}
-	if !hasTaunt {
-		t.Errorf("Champion Anaphiel keywords = %v, want Taunt", ChampionAnaphiel.Keywords)
-	}
+		if !hasTaunt {
+			t.Errorf("Champion Anaphiel keywords = %v, want Taunt", ChampionAnaphiel.Keywords)
+		}
+	})
 }

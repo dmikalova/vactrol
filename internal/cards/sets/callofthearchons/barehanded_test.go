@@ -3,43 +3,82 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Barehanded returns every artifact in play — both players' — to the top of its
-// owner's deck, and grants its controller 1 Æmber from its bonus pip.
+// Barehanded
+//
+//	House:  Brobnar
+//	Type:   Action
+//	Rarity: Rare
+//	Æmber:  1
+//
+//	Play: Put each artifact on top of its owner's deck.
 func TestBarehanded(t *testing.T) {
-	g := cardtest.Started(t, engine.Brobnar)
+	t.Run("returns each artifact to the top of its owner's deck", func(t *testing.T) {
+		var mine, theirs ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Brobnar,
+				Hand:   ct.Cards(Barehanded),
+				InPlay: ct.Cards(ct.Bind(&mine, ct.Artifact(ct.OfHouse(card.House.Brobnar)))),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&theirs, ct.Artifact(ct.OfHouse(card.House.Untamed)))),
+			},
+		})
 
-	mine := engine.NewCard("My Relic", engine.Brobnar, engine.Artifact, engine.Rare)
-	theirs := engine.NewCard("Their Relic", engine.Untamed, engine.Artifact, engine.Rare)
-	myArtifact := g.AddArtifact(mine, 0)
-	theirArtifact := g.AddArtifact(theirs, 1)
+		h.P1.Play(Barehanded)
 
-	g.AddToHand(Barehanded, 0)
-	if err := g.PlayAction(0, 0); err != nil {
-		t.Fatalf("PlayAction: %v", err)
-	}
+		h.Expect(mine).At(ct.Deck)
+		h.Expect(theirs).At(ct.Deck)
+		h.P1.ExpectAmber(1) // the Æmber bonus pip resolves on play
+		if top := h.Game().State.Deck[0].IDs[0]; top != mine.ID() {
+			t.Errorf("player 0 deck top = %d, want mine (%d)", top, mine.ID())
+		}
+		if top := h.Game().State.Deck[1].IDs[0]; top != theirs.ID() {
+			t.Errorf("player 1 deck top = %d, want theirs (%d)", top, theirs.ID())
+		}
+	})
 
-	// Both artifact rows are cleared.
-	if got := g.Artifacts(0); len(got) != 0 {
-		t.Errorf("friendly artifacts = %v, want empty", got)
-	}
-	if got := g.Artifacts(1); len(got) != 0 {
-		t.Errorf("enemy artifacts = %v, want empty", got)
-	}
+	t.Run("orders several artifacts without pausing", func(t *testing.T) {
+		var artA, artB ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Brobnar,
+				Hand:  ct.Cards(Barehanded),
+				InPlay: ct.Cards(
+					ct.Bind(&artA, ct.Artifact(ct.OfHouse(card.House.Brobnar))),
+					ct.Bind(&artB, ct.Artifact(ct.OfHouse(card.House.Brobnar))),
+				),
+			},
+		})
 
-	// Each artifact sits on top of its own owner's deck.
-	if deck := g.State.Deck[0]; deck.Count != 1 || deck.IDs[0] != myArtifact {
-		t.Errorf("player 0 deck top = %v (count %d), want %d", deck.IDs[0], deck.Count, myArtifact)
-	}
-	if deck := g.State.Deck[1]; deck.Count != 1 || deck.IDs[0] != theirArtifact {
-		t.Errorf("player 1 deck top = %v (count %d), want %d", deck.IDs[0], deck.Count, theirArtifact)
-	}
+		h.P1.Play(Barehanded) // two artifacts to order, but no click is needed
+		h.Expect(artA).At(ct.Deck)
+		h.Expect(artB).At(ct.Deck)
+	})
 
-	// The Æmber bonus pip resolves on play.
-	if g.Aember(0) != 1 {
-		t.Errorf("controller Æmber = %d, want 1", g.Aember(0))
-	}
+	t.Run("Player.Order controls the stacking order", func(t *testing.T) {
+		var artA, artB ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Brobnar,
+				Hand:  ct.Cards(Barehanded),
+				InPlay: ct.Cards(
+					ct.Bind(&artA, ct.Artifact(ct.OfHouse(card.House.Brobnar))),
+					ct.Bind(&artB, ct.Artifact(ct.OfHouse(card.House.Brobnar))),
+				),
+			},
+		})
+
+		// Returning artB first stacks artA last, so artA ends up on top.
+		h.P1.Order(artB, artA)
+		h.P1.Play(Barehanded)
+
+		if top := h.Game().State.Deck[0].IDs[0]; top != artA.ID() {
+			t.Errorf("deck top = %d, want artA (%d)", top, artA.ID())
+		}
+	})
 }

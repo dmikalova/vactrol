@@ -3,28 +3,38 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Francus captures 1 Æmber after an enemy creature is destroyed fighting it. Its
-// armor lets it survive the retaliating fight damage.
+// Francus
+//
+//	House:  Sanctum
+//	Type:   Creature
+//	Rarity: Uncommon
+//	Power:  6
+//	Armor:  1
+//	Traits: Knight • Spirit
+//
+//	After a creature is destroyed fighting Francus, Francus captures 1 Æmber.
 func TestFrancus(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	francus := g.AddToBattleline(Francus, 0)
-	prey := g.AddToBattleline(cardtest.Vanilla("Prey", engine.Mars, 1), 1)
-	g.State.Aember[1] = 3 // opponent has Æmber to capture
+	t.Run("captures 1 Æmber when a creature is destroyed fighting it", func(t *testing.T) {
+		var prey ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Sanctum,
+				InPlay: ct.Cards(Francus),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&prey, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(1)))),
+				Amber:  3,
+			},
+		})
 
-	if err := g.Fight(0, francus, prey); err != nil {
-		t.Fatalf("Fight: %v", err)
-	}
-	if len(g.Battleline(1)) != 0 {
-		t.Error("the 1-power prey should be destroyed")
-	}
-	if g.AmberOn(francus) != 1 {
-		t.Errorf("captured aember = %d, want 1", g.AmberOn(francus))
-	}
-	if g.Aember(1) != 2 {
-		t.Errorf("opponent aember = %d, want 2 (3 - 1 captured)", g.Aember(1))
-	}
+		h.P1.Fight(Francus, prey)
+
+		h.Expect(prey).At(ct.Discard) // the 1-power prey is destroyed
+		h.Expect(Francus).AmberOn(1)  // Francus survives (armor 1) and captures 1
+		h.P2.ExpectAmber(2)           // 3 - 1 captured
+	})
 }

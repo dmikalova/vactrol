@@ -19,8 +19,9 @@ var KeyToDis = card.New(
 	card.Provenance(card.CotA, 74),
 	card.WithTraits("Item"),
 	card.WithKeywords(card.Keyword.Versatile),
-	card.WithAbility(card.Trigger.Action, card.Sequence{Effects: []card.Effect{
-		card.Destroy{Target: card.Target.This},
-		card.Destroy{Target: card.Target.EachCreature},
-	}}),
+	card.WithAbility(
+		card.Trigger.Action, card.Sequence{Effects: []card.Effect{
+			card.Destroy{Target: card.Target.This},
+			card.Destroy{Target: card.Target.EachCreature},
+		}}),
 )

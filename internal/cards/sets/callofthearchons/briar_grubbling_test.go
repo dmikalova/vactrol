@@ -3,26 +3,33 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Briar Grubbling has Hazardous 5: a creature that attacks it is dealt 5 damage
-// before fight damage, enough to destroy most attackers before combat.
+// Briar Grubbling
+//
+//	House:  Untamed
+//	Type:   Creature
+//	Rarity: Rare
+//	Power:  2
+//	Traits: Beast • Insect
+//
+//	Hazardous 5.
 func TestBriarGrubbling(t *testing.T) {
-	g := cardtest.Started(t, engine.Mars)
-	grub := g.AddToBattleline(BriarGrubbling, 1) // 2 power, Hazardous 5
-	attacker := g.AddToBattleline(cardtest.Vanilla("Attacker", engine.Mars, 4), 0)
+	t.Run("Hazardous 5 destroys the attacker before any fight damage", func(t *testing.T) {
+		var attacker ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Mars,
+				InPlay: ct.Cards(ct.Bind(&attacker, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(4)))),
+			},
+			P2: ct.Side{InPlay: ct.Cards(BriarGrubbling)},
+		})
 
-	if err := g.Fight(0, attacker, grub); err != nil {
-		t.Fatalf("Fight: %v", err)
-	}
-	// The 4-power attacker is destroyed by Hazardous 5 before combat, so the
-	// grubbling exchanges no fight damage and survives unharmed.
-	if len(g.Battleline(0)) != 0 {
-		t.Error("attacker should be destroyed by Hazardous 5")
-	}
-	if g.Damage(grub) != 0 {
-		t.Errorf("grubbling damage = %d, want 0 (no combat occurred)", g.Damage(grub))
-	}
+		h.P1.Fight(attacker, BriarGrubbling)
+
+		h.Expect(attacker).At(ct.Discard)                  // destroyed by Hazardous 5
+		h.Expect(BriarGrubbling).Damage(0).At(ct.PlayArea) // no combat occurred
+	})
 }

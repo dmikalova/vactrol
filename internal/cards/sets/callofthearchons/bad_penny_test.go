@@ -3,27 +3,29 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 	"github.com/dmikalova/vactrol/internal/engine"
 )
 
-// When destroyed, Bad Penny returns to its owner's hand instead of the discard.
+// Bad Penny
+//
+//	House:  Shadows
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  1
+//	Traits: Human • Thief
+//
+//	Destroyed: Put Bad Penny into its owner's hand.
 func TestBadPenny(t *testing.T) {
-	g := cardtest.Started(t, engine.Shadows)
-	id := g.AddToBattleline(BadPenny, 0)
+	t.Run("returns to its owner's hand when destroyed", func(t *testing.T) {
+		var penny ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Shadows, InPlay: ct.Cards(ct.Bind(&penny, BadPenny))},
+		})
 
-	g.DestroyEach(0, []engine.LocalID{id})
+		h.Game().DestroyEach(0, []engine.LocalID{penny.ID()})
 
-	if g.State.Hand[0].Count != 1 {
-		t.Fatalf("hand count = %d, want 1", g.State.Hand[0].Count)
-	}
-	if g.State.Hand[0].IDs[0] != id {
-		t.Errorf("hand card = %v, want Bad Penny (%v)", g.State.Hand[0].IDs[0], id)
-	}
-	if g.State.Discard[0].Count != 0 {
-		t.Errorf("discard count = %d, want 0", g.State.Discard[0].Count)
-	}
-	if len(g.Battleline(0)) != 0 {
-		t.Errorf("battleline = %d creatures, want 0", len(g.Battleline(0)))
-	}
+		h.Expect(penny).At(ct.Hand) // returned to hand instead of the discard
+	})
 }

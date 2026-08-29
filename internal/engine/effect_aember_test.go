@@ -6,7 +6,7 @@ func TestGainAemberEffect(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	src := g.AddToBattleline(testCreature("src", 1), 0)
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
-	e := GainAember{Amount: 2}
+	e := GainAember{Player: Controller, Amount: 2}
 	if e.Text() != "gain 2 Æmber" {
 		t.Errorf("text = %q", e.Text())
 	}
@@ -29,8 +29,8 @@ func TestGainAemberPerCount(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	g.State.Keys[1] = 2 // opponent has forged 2 keys
 	ctx := &EffectContext{Resolver: g, Controller: 0}
-	e := GainAember{Amount: 1, Per: OpponentForgedKeys{}}
-	if e.Text() != "gain 1 Æmber for each key your opponent has forged" {
+	e := GainAember{Player: Controller, Amount: 1, Per: OpponentForgedKeys{}}
+	if e.Text() != "for each key your opponent has forged, gain 1 Æmber" {
 		t.Errorf("text = %q", e.Text())
 	}
 	e.Resolve(ctx)
@@ -45,8 +45,8 @@ func TestGainAemberPerArchivedCards(t *testing.T) {
 		g.State.Archives[0].add(g.Register(testCreature("a", 1), 0))
 	}
 	ctx := &EffectContext{Resolver: g, Controller: 0}
-	e := GainAember{Amount: 1, Per: CardsInArchives{}}
-	if e.Text() != "gain 1 Æmber for each card in your archives" {
+	e := GainAember{Player: Controller, Amount: 1, Per: CardsInArchives{Player: Controller}}
+	if e.Text() != "for each card in your archives, gain 1 Æmber" {
 		t.Errorf("text = %q", e.Text())
 	}
 	e.Resolve(ctx)
@@ -62,7 +62,7 @@ func TestLoseAemberEffect(t *testing.T) {
 	g.State.Aember[0] = 3
 	g.State.Aember[1] = 1
 
-	self := LoseAember{Amount: 2}
+	self := LoseAember{Player: Controller, Amount: 2}
 	if self.Text() != "lose 2 Æmber" {
 		t.Errorf("self text = %q", self.Text())
 	}
@@ -116,16 +116,35 @@ func TestCaptureAemberEffect(t *testing.T) {
 	}
 }
 
+func TestCaptureAllAember(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	src := g.AddToBattleline(testCreature("drumble", 2), 0)
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+	g.State.Aember[1] = 7
+
+	e := CaptureAember{All: true}
+	if e.Text() != "{self} captures all your opponent's Æmber" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if g.AmberOn(src) != 7 {
+		t.Errorf("captured = %d, want 7 (all of the opponent's pool)", g.AmberOn(src))
+	}
+	if g.Aember(1) != 0 {
+		t.Errorf("opponent aember = %d, want 0", g.Aember(1))
+	}
+}
+
 func TestExaltEffect(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	src := g.AddToBattleline(testCreature("src", 1), 0)
 	enemy := g.AddToBattleline(testCreature("enemy", 1), 1)
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
 
-	if got := (Exalt{Player: Controller, Times: 1}).Text(); got != "exalt a friendly creature" {
+	if got := (Exalt{Target: Target{Kind: TargetChosenFriendlyCreature}, Times: 1}).Text(); got != "exalt a friendly creature" {
 		t.Errorf("single exalt text = %q", got)
 	}
-	e := Exalt{Player: Opponent, Times: 2}
+	e := Exalt{Target: Target{Kind: TargetChosenEnemyCreature}, Times: 2}
 	if e.Text() != "exalt an enemy creature 2 times" {
 		t.Errorf("text = %q", e.Text())
 	}
@@ -137,4 +156,23 @@ func TestExaltEffect(t *testing.T) {
 	// No candidates: remove the enemy and resolve again (logs, no panic).
 	g.DestroyEach(0, []LocalID{enemy})
 	e.Resolve(ctx)
+}
+
+func TestEachPlayerLosesAllBut(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.State.Aember[0] = 8 // over the cap
+	g.State.Aember[1] = 3 // at or below the cap
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+
+	e := EachPlayerLosesAllBut{Keep: 5}
+	if e.Text() != "each player with 6 Æmber or more loses all but 5 Æmber" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if g.State.Aember[0] != 5 {
+		t.Errorf("player 0 aember = %d, want 5 (reduced)", g.State.Aember[0])
+	}
+	if g.State.Aember[1] != 3 {
+		t.Errorf("player 1 aember = %d, want 3 (unchanged)", g.State.Aember[1])
+	}
 }

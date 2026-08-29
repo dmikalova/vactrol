@@ -1,28 +1,34 @@
 package callofthearchons
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Mantle of the Zealot grants versatile, which lets its host be used as if it
-// belonged to the active house: a creature of another house can reap once it
-// wears the Mantle, even though the active house does not match its own.
+// Mantle of the Zealot
+//
+//	House:  Sanctum
+//	Type:   Upgrade
+//	Rarity: Rare
+//
+//	This creature gains versatile.
 func TestMantleOfTheZealot(t *testing.T) {
-	if got := engine.RenderCardText(&MantleOfTheZealot); !strings.Contains(got, "This creature gains versatile.") {
-		t.Errorf("Mantle text = %q, want it to grant versatile", got)
-	}
+	t.Run("grants versatile so an out-of-house host can reap", func(t *testing.T) {
+		var host ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Sanctum,
+				InPlay: ct.Cards(
+					ct.Upgraded(ct.Bind(&host, ct.Creature(ct.OfHouse(card.House.Dis), ct.Power(3))), MantleOfTheZealot),
+				),
+			},
+		})
 
-	g := cardtest.Started(t, engine.Sanctum)
-	off := g.AddToBattleline(cardtest.Vanilla("Offhouse", engine.Dis, 3), 0)
-	g.AddToHand(MantleOfTheZealot, 0)
-	if _, err := g.PlayUpgrade(0, 0); err != nil {
-		t.Fatalf("PlayUpgrade: %v", err)
-	}
-	if err := g.Reap(0, off); err != nil {
-		t.Fatalf("reap of Versatile-granted creature out of house: %v", err)
-	}
+		h.P1.Reap(host) // versatile lets the Dis creature reap on a Sanctum turn
+
+		h.P1.ExpectAmber(1)
+		h.Expect(host).Exhausted()
+	})
 }

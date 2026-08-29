@@ -3,27 +3,33 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Way of the Wolf grants its host skirmish, so the host takes no damage in return
-// when it is used to fight.
+// Way of the Wolf
+//
+//	House:  Untamed
+//	Type:   Upgrade
+//	Rarity: Uncommon
+//	Æmber:  1
+//
+//	This creature gains skirmish.
 func TestWayOfTheWolf(t *testing.T) {
-	g := cardtest.Started(t, engine.Untamed)
-	host := g.AddToBattleline(cardtest.Vanilla("Host", engine.Untamed, 4), 0)
-	g.AddToHand(WayOfTheWolf, 0)
-	if _, err := g.PlayUpgrade(0, 0); err != nil { // only candidate is the friendly host
-		t.Fatalf("PlayUpgrade: %v", err)
-	}
-	wall := g.AddToBattleline(cardtest.Vanilla("Wall", engine.Mars, 10), 1)
-	if err := g.Fight(0, host, wall); err != nil {
-		t.Fatalf("Fight: %v", err)
-	}
-	if len(g.Battleline(0)) != 1 {
-		t.Error("granted skirmish should spare the host from the 10-power wall")
-	}
-	if g.Damage(host) != 0 {
-		t.Errorf("host took %d damage, want 0 (skirmish)", g.Damage(host))
-	}
+	t.Run("grants the host skirmish, sparing it return damage", func(t *testing.T) {
+		var host, wall ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Untamed,
+				InPlay: ct.Cards(
+					ct.Upgraded(ct.Bind(&host, ct.Creature(ct.OfHouse(card.House.Untamed), ct.Power(4))), WayOfTheWolf),
+				),
+			},
+			P2: ct.Side{InPlay: ct.Cards(ct.Bind(&wall, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(10))))},
+		})
+
+		h.P1.Fight(host, wall)
+
+		h.Expect(host).Damage(0).At(ct.PlayArea) // skirmish: no return damage from the 10-power wall
+	})
 }

@@ -3,23 +3,35 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Gorm of Omm sacrifices itself and destroys another artifact.
+// Gorm of Omm
+//
+//	House:  Sanctum
+//	Type:   Artifact
+//	Rarity: Uncommon
+//	Traits: Item
+//
+//	Versatile.
+//	Action: Destroy Gorm of Omm, and destroy an artifact.
 func TestGormOfOmm(t *testing.T) {
-	g := cardtest.Started(t, engine.Sanctum)
-	gorm := g.AddArtifact(GormOfOmm, 0)
-	g.AddArtifact(Cannon, 1) // the only other artifact, so it is the forced choice
+	t.Run("sacrifices itself and destroys another artifact", func(t *testing.T) {
+		var cannon ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Sanctum,
+				InPlay: ct.Cards(GormOfOmm),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&cannon, Cannon)), // the only other artifact, so it is the forced choice
+			},
+		})
 
-	if err := g.UseAction(0, gorm); err != nil {
-		t.Fatalf("UseAction: %v", err)
-	}
-	if len(g.Artifacts(0)) != 0 {
-		t.Error("Gorm of Omm should sacrifice itself")
-	}
-	if len(g.Artifacts(1)) != 0 {
-		t.Errorf("Gorm of Omm should destroy the other artifact; remaining %v", g.Artifacts(1))
-	}
+		h.P1.UseAction(GormOfOmm)
+
+		h.Expect(GormOfOmm).At(ct.Discard) // sacrifices itself
+		h.Expect(cannon).At(ct.Discard)    // and destroys the other artifact
+	})
 }

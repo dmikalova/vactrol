@@ -10,7 +10,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Power:  4
 //	Traits: Cyborg • Scientist
 //
-//	Play: Gain 1 Æmber for each key your opponent has forged.
+//	Play: For each key your opponent has forged, gain 1 Æmber.
 var DrEscotera = card.New(
 	"Dr. Escotera",
 	card.House.Logos,
@@ -19,5 +19,10 @@ var DrEscotera = card.New(
 	card.Provenance(card.CotA, 140),
 	card.WithPower(4),
 	card.WithTraits("Cyborg", "Scientist"),
-	card.WithAbility(card.Trigger.Play, card.GainAember{Amount: 1, Per: card.OpponentForgedKeys{}}),
+	card.WithAbility(
+		card.Trigger.Play, card.GainAember{
+			Player: card.Controller,
+			Amount: 1,
+			Per:    card.OpponentForgedKeys{},
+		}),
 )

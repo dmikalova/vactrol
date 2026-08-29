@@ -38,7 +38,7 @@ func exBruteStrength() CardDefinition {
 func exBattleFury() CardDefinition {
 	return NewCard("Battle Fury", Brobnar, Action, Common,
 		WithAemberBonus(1),
-		WithAbility(TriggerAfterPlay, OnChosenCreature{Player: Controller, Verbs: []CreatureVerb{ReadyVerb{}, FightVerb{}}}))
+		WithAbility(TriggerAfterPlay, OnChooseCreature{Target: Target{Kind: TargetChosenFriendlyCreature}, Verbs: []CreatureVerb{ReadyVerb{}, FightVerb{}}}))
 }
 
 func exAutocannon() CardDefinition {
@@ -70,11 +70,37 @@ func handIdxByID(g *Game, player int, want LocalID) int {
 // orderLastChooser always picks the last candidate, reversing an ordering.
 type orderLastChooser struct{}
 
-func (orderLastChooser) ChooseCreature(_ string, c []LocalID) (LocalID, bool) {
+func (orderLastChooser) ChooseCreature(_, _ string, c []LocalID) (LocalID, bool) {
 	return c[len(c)-1], true
 }
 
 // orderRejectChooser refuses to pick, so ordering falls back to the given order.
 type orderRejectChooser struct{}
 
-func (orderRejectChooser) ChooseCreature(string, []LocalID) (LocalID, bool) { return 0, false }
+func (orderRejectChooser) ChooseCreature(_, _ string, _ []LocalID) (LocalID, bool) {
+	return 0, false
+}
+
+// orderAllChooser implements Orderer, arranging ids in a single call (reversing
+// them) instead of being asked to pick the next id repeatedly.
+type orderAllChooser struct{}
+
+func (orderAllChooser) ChooseCreature(_, _ string, c []LocalID) (LocalID, bool) {
+	return c[0], true
+}
+
+func (orderAllChooser) OrderCreatures(_, _ string, ids []LocalID) []LocalID {
+	out := append([]LocalID(nil), ids...)
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+// attachUpgrade registers an upgrade and attaches it to a host creature.
+func attachUpgrade(g *Game, host LocalID, def CardDefinition) {
+	up := g.Register(def, g.owner(host))
+	core := &g.State.Cards[host]
+	core.Upgrades[core.UpgradeCount] = up
+	core.UpgradeCount++
+}

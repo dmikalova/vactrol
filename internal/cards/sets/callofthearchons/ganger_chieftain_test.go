@@ -3,27 +3,34 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Ganger Chieftain's Play readies and fights with a neighboring creature.
+// Ganger Chieftain
+//
+//	House:  Brobnar
+//	Type:   Creature
+//	Rarity: Common
+//	Power:  5
+//	Traits: Giant
+//
+//	Play: Ready and fight with a neighboring creature.
 func TestGangerChieftain(t *testing.T) {
-	g := cardtest.Started(t, engine.Brobnar)
-	// A friendly creature already in play becomes Ganger's neighbor when Ganger
-	// is played onto the flank beside it.
-	neighbor := g.AddToBattleline(cardtest.Vanilla("Neighbor", engine.Brobnar, 4), 0)
-	g.AddToBattleline(cardtest.Vanilla("Foe", engine.Mars, 1), 1)
-	g.AddToHand(GangerChieftain, 0)
+	t.Run("readies and fights with a neighboring creature when played", func(t *testing.T) {
+		var neighbor, foe ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Brobnar,
+				InPlay: ct.Cards(ct.Bind(&neighbor, ct.Creature(ct.OfHouse(card.House.Brobnar), ct.Power(4)))),
+				Hand:   ct.Cards(GangerChieftain),
+			},
+			P2: ct.Side{InPlay: ct.Cards(ct.Bind(&foe, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(1))))},
+		})
 
-	if _, err := g.PlayCreature(0, 0, false); err != nil { // right flank, beside Neighbor
-		t.Fatalf("PlayCreature: %v", err)
-	}
-	// The neighbor is readied and made to fight the enemy, destroying the 1-power foe.
-	if len(g.Battleline(1)) != 0 {
-		t.Error("the neighbor should have fought and destroyed the enemy")
-	}
-	if !g.State.Cards[neighbor].Exhausted {
-		t.Error("the neighbor should be exhausted after fighting")
-	}
+		h.P1.Play(GangerChieftain)
+
+		h.Expect(foe).At(ct.Discard)   // the neighbor fought and destroyed it
+		h.Expect(neighbor).Exhausted() // exhausted after fighting
+	})
 }

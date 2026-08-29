@@ -19,7 +19,10 @@ var SilentDagger = card.New(
 	card.WithAemberBonus(1),
 	card.WithStatic(card.StaticModifier{
 		Granted: []card.Ability{
-			{Trigger: card.Trigger.Reap, Effect: card.DealDamage{Amount: 4, Target: card.Target.Creature.OnFlank()}},
+			{Trigger: card.Trigger.Reap, Effect: card.DealDamage{
+				Amount: 4,
+				Target: card.Target.Creature.OnFlank(),
+			}},
 		},
 	}),
 )

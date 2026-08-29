@@ -3,26 +3,35 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Way of the Bear grants its host +2 assault, so the host deals 2 extra damage
-// to whatever it attacks, before fight damage.
+// Way of the Bear
+//
+//	House:  Untamed
+//	Type:   Upgrade
+//	Rarity: Uncommon
+//	Æmber:  1
+//
+//	This creature gains +2 assault.
 func TestWayOfTheBear(t *testing.T) {
-	g := cardtest.Started(t, engine.Untamed)
-	host := g.AddToBattleline(cardtest.Vanilla("Host", engine.Untamed, 3), 0)
-	g.AddToHand(WayOfTheBear, 0)
-	if _, err := g.PlayUpgrade(0, 0); err != nil {
-		t.Fatalf("PlayUpgrade: %v", err)
-	}
-	foe := g.AddToBattleline(cardtest.Vanilla("Foe", engine.Mars, 10), 1)
+	t.Run("grants its host +2 assault before fight damage", func(t *testing.T) {
+		var host, foe ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House: card.House.Untamed,
+				InPlay: ct.Cards(
+					ct.Upgraded(ct.Bind(&host, ct.Creature(ct.OfHouse(card.House.Untamed), ct.Power(3))), WayOfTheBear),
+				),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(ct.Bind(&foe, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(10)))),
+			},
+		})
 
-	if err := g.Fight(0, host, foe); err != nil {
-		t.Fatalf("Fight: %v", err)
-	}
-	// Host (3 power) with Assault 2: foe takes 2 assault + 3 fight = 5.
-	if g.Damage(foe) != 5 {
-		t.Errorf("foe damage = %d, want 5 (2 assault + 3 fight)", g.Damage(foe))
-	}
+		h.P1.Fight(host, foe)
+
+		h.Expect(foe).Damage(5) // 2 assault + 3 fight
+	})
 }

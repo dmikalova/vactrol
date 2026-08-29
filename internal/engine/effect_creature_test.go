@@ -2,14 +2,14 @@ package engine
 
 import "testing"
 
-func TestOnChosenCreatureEnemyAndNoTarget(t *testing.T) {
+func TestOnChooseCreatureEnemyAndNoTarget(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	src := g.AddToBattleline(testCreature("src", 1), 0)
 	enemy := g.AddToBattleline(testCreature("enemy", 1), 1)
 	g.State.Cards[enemy].Exhausted = true
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
 
-	onEnemy := OnChosenCreature{Player: Opponent, Verbs: []CreatureVerb{ReadyVerb{}}}
+	onEnemy := OnChooseCreature{Target: Target{Kind: TargetChosenEnemyCreature}, Verbs: []CreatureVerb{ReadyVerb{}}}
 	if onEnemy.Text() != "ready an enemy creature" {
 		t.Errorf("text = %q", onEnemy.Text())
 	}
@@ -36,7 +36,7 @@ func TestFightVerbNoEnemy(t *testing.T) {
 // actor builds a creature with an "Action:" ability that gains 5 Æmber.
 func actor(g *Game) LocalID {
 	return g.AddToBattleline(NewCard("actor", Brobnar, Creature, Common, WithPower(3),
-		WithAbility(TriggerAction, GainAember{Amount: 5})), 0)
+		WithAbility(TriggerAction, GainAember{Player: Controller, Amount: 5})), 0)
 }
 
 func TestUseVerb(t *testing.T) {
@@ -102,14 +102,14 @@ func TestUsingExhaustedCreatureDoesNothing(t *testing.T) {
 	}
 }
 
-func TestOnChosenCreatureExcludeHouse(t *testing.T) {
+func TestOnChooseCreatureExcludeHouse(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	sanc := g.AddToBattleline(NewCard("s", Sanctum, Creature, Common, WithPower(3)), 0)
 	mars := g.AddToBattleline(NewCard("m", Mars, Creature, Common, WithPower(3)), 0)
 	g.State.Cards[mars].Exhausted = true
 	ctx := &EffectContext{Resolver: g, Source: sanc, Controller: 0}
 
-	e := OnChosenCreature{ExcludeHouse: Sanctum, Verbs: []CreatureVerb{ReadyVerb{}}}
+	e := OnChooseCreature{Target: Target{Kind: TargetChosenFriendlyCreature}.ExceptHouse(Sanctum), Verbs: []CreatureVerb{ReadyVerb{}}}
 	if e.Text() != "ready a friendly non-Sanctum creature" {
 		t.Errorf("text = %q", e.Text())
 	}
@@ -126,7 +126,7 @@ type idChooser struct {
 	id LocalID
 }
 
-func (c idChooser) ChooseCreature(_ string, cands []LocalID) (LocalID, bool) {
+func (c idChooser) ChooseCreature(_, _ string, cands []LocalID) (LocalID, bool) {
 	for _, x := range cands {
 		if x == c.id {
 			return x, true
@@ -139,7 +139,7 @@ func TestUseVerbNesting(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	// A's "Reap:" uses a friendly creature; B is the one it uses (to reap).
 	a := g.AddToBattleline(NewCard("A", Brobnar, Creature, Common, WithPower(3),
-		WithAbility(TriggerAfterReap, OnChosenCreature{Verbs: []CreatureVerb{UseVerb{}}})), 0)
+		WithAbility(TriggerAfterReap, OnChooseCreature{Target: Target{Kind: TargetChosenFriendlyCreature}, Verbs: []CreatureVerb{UseVerb{}}})), 0)
 	b := g.AddToBattleline(testCreature("B", 3), 0)
 	g.SetChooser(0, idChooser{id: b}) // use B, not A itself
 
@@ -164,7 +164,7 @@ func TestTriggerWindowPicksUpNewlyGrantedAbility(t *testing.T) {
 	// granted ability fires in the same window.
 	attach := gameEffect{fn: func() {
 		up := g.Register(NewCard("boost", Brobnar, Upgrade, Common,
-			WithStatic(StaticModifier{Granted: []Ability{{Trigger: TriggerAfterReap, Effect: GainAember{Amount: 3}}}})), 0)
+			WithStatic(StaticModifier{Granted: []Ability{{Trigger: TriggerAfterReap, Effect: GainAember{Player: Controller, Amount: 3}}}})), 0)
 		core := &g.State.Cards[a]
 		core.Upgrades[core.UpgradeCount] = up
 		core.UpgradeCount++
@@ -178,7 +178,7 @@ func TestTriggerWindowPicksUpNewlyGrantedAbility(t *testing.T) {
 	}
 }
 
-func TestOnChosenCreatureNeighbors(t *testing.T) {
+func TestOnChooseCreatureNeighbors(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	g.AddToBattleline(testCreature("far", 5), 0) // NOT a neighbor of src
 	g.AddToBattleline(testCreature("left", 3), 0)
@@ -187,7 +187,7 @@ func TestOnChosenCreatureNeighbors(t *testing.T) {
 	foe := g.AddToBattleline(testCreature("foe", 10), 1)
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
 
-	e := OnChosenCreature{Neighbors: true, Verbs: []CreatureVerb{ReadyVerb{}, FightVerb{}}}
+	e := OnChooseCreature{Target: Target{Kind: TargetChosenCreature}.Neighboring(), Verbs: []CreatureVerb{ReadyVerb{}, FightVerb{}}}
 	if e.Text() != "ready and fight with a neighboring creature" {
 		t.Errorf("text = %q", e.Text())
 	}
@@ -196,5 +196,22 @@ func TestOnChosenCreatureNeighbors(t *testing.T) {
 	// `far`: the foe takes left's 3 power, not far's 5.
 	if g.Damage(foe) != 3 {
 		t.Errorf("foe damage = %d, want 3 (a neighbor fought, not the far creature)", g.Damage(foe))
+	}
+}
+
+func TestStunExhaustVerbs(t *testing.T) {
+	if got := (StunVerb{}).VerbText(); got != "stun" {
+		t.Errorf("StunVerb text = %q", got)
+	}
+	if got := (ExhaustVerb{}).VerbText(); got != "exhaust" {
+		t.Errorf("ExhaustVerb text = %q", got)
+	}
+	g := started(t)
+	id := g.AddToBattleline(testCreature("c", 3), 0)
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+	StunVerb{}.Apply(ctx, id)
+	ExhaustVerb{}.Apply(ctx, id)
+	if !g.State.Cards[id].Stunned || !g.State.Cards[id].Exhausted {
+		t.Errorf("verbs did not apply: stunned=%v exhausted=%v", g.State.Cards[id].Stunned, g.State.Cards[id].Exhausted)
 	}
 }

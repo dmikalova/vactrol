@@ -29,7 +29,7 @@ func (e ArchiveFromHand) Resolve(ctx *EffectContext) {
 		if len(hand) == 0 {
 			return
 		}
-		id, ok := ctx.Resolver.ChooseCreature(ctx.Controller, "Choose a card to archive", hand)
+		id, ok := ctx.ChooseCreature("Choose a card to archive", hand)
 		if !ok {
 			return
 		}
@@ -60,9 +60,17 @@ func (e ArchiveTopOfDeck) Resolve(ctx *EffectContext) {
 	}
 }
 
-// DiscardArchives moves all of a player's archived cards into their discard pile.
+// DiscardArchives moves all of a player's archived cards into their discard zone.
 type DiscardArchives struct {
 	Player Player
+}
+
+// validate rejects a DiscardArchives whose player was left unset.
+func (e DiscardArchives) validate() error {
+	if !e.Player.valid() {
+		return errUnsetPlayer("DiscardArchives")
+	}
+	return nil
 }
 
 // Text renders the effect, e.g. "your opponent discards each of their archived

@@ -3,29 +3,42 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Longfused Mines sacrifices itself to deal 3 damage to each enemy creature not
-// on a flank, sparing the flanks.
+// Longfused Mines
+//
+//	House:  Shadows
+//	Type:   Artifact
+//	Rarity: Rare
+//	Æmber:  1
+//	Traits: Weapon
+//
+//	Versatile.
+//	Action: Destroy Longfused Mines, and deal 3 damage to each enemy creature that is not on a flank.
 func TestLongfusedMines(t *testing.T) {
-	g := cardtest.Started(t, engine.Shadows)
-	mines := g.AddArtifact(LongfusedMines, 0)
-	left := g.AddToBattleline(cardtest.Vanilla("Left", engine.Mars, 5), 1)
-	mid := g.AddToBattleline(cardtest.Vanilla("Mid", engine.Mars, 5), 1)
-	right := g.AddToBattleline(cardtest.Vanilla("Right", engine.Mars, 5), 1)
+	t.Run("sacrifices itself and deals 3 to each non-flank enemy", func(t *testing.T) {
+		var left, mid, right ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Shadows,
+				InPlay: ct.Cards(LongfusedMines),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&left, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(5))),
+					ct.Bind(&mid, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(5))),
+					ct.Bind(&right, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(5))),
+				),
+			},
+		})
 
-	if err := g.UseAction(0, mines); err != nil {
-		t.Fatalf("UseAction: %v", err)
-	}
-	if g.Damage(mid) != 3 {
-		t.Errorf("interior enemy damage = %d, want 3", g.Damage(mid))
-	}
-	if g.Damage(left) != 0 || g.Damage(right) != 0 {
-		t.Error("flank enemies should be untouched")
-	}
-	if len(g.Artifacts(0)) != 0 {
-		t.Error("Longfused Mines should sacrifice itself")
-	}
+		h.P1.UseAction(LongfusedMines)
+
+		h.Expect(mid).Damage(3)  // interior enemy is hit
+		h.Expect(left).Damage(0) // flanks are spared
+		h.Expect(right).Damage(0)
+		h.Expect(LongfusedMines).At(ct.Discard) // sacrificed itself
+	})
 }

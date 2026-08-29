@@ -1,0 +1,149 @@
+package engine
+
+// This file holds combat: an attacker fighting a defender, dealing damage (with
+// armor, Skirmish, Assault, and Hazardous), and deciding which creatures the
+// damage destroys. The destruction itself is carried out in game_destroy.go.
+
+// Combat: use one of your ready creatures to fight an enemy creature. Both deal
+// damage equal to their power at the same time; armor reduces the damage a
+// creature takes, and a Skirmish attacker takes no damage back. A creature with
+// damage equal to or greater than its power is destroyed, and both deaths are
+// resolved together, so neither fighter's destruction changes the damage the
+// other deals.
+//
+//rulebook:combat Combat
+
+// fight resolves combat between an attacker and a defender. Both deal damage equal
+// to their power simultaneously; Skirmish prevents the attacker taking damage back.
+func (g *Game) fight(attacker, defender LocalID) {
+	// Using a creature to fight exhausts it before anything else resolves, so a
+	// "Before Fight" ability already sees the attacker exhausted.
+	g.State.Cards[attacker].Exhausted = true
+	g.triggerAbilities(attacker, TriggerBeforeFight, 0, false)
+
+	// Assault and Hazardous deal their damage before fight damage: the attacker's
+	// Assault hits the defender, the defender's Hazardous hits the attacker.
+	// Either can destroy a fighter before combat. Skipped if a "Before Fight"
+	// effect already removed the defender.
+	if g.inPlay(defender) {
+		var pre []DamageTarget
+		if a := g.assault(attacker); a > 0 {
+			pre = append(pre, DamageTarget{ID: defender, Amount: a})
+		}
+		if h := g.hazardous(defender); h > 0 {
+			pre = append(pre, DamageTarget{ID: attacker, Amount: h})
+		}
+		if len(pre) > 0 {
+			g.dealDamage(g.owner(attacker), pre...)
+		}
+	}
+
+	// Combat damage is exchanged only while both fighters are still in play (a
+	// "Before Fight" effect, Assault, or Hazardous can remove one first).
+	if g.inPlay(attacker) && g.inPlay(defender) {
+		ap, dp := g.Power(attacker), g.Power(defender)
+		g.logf("%s (%d power) fights %s (%d power)", g.Name(attacker), ap, g.Name(defender), dp)
+		// Both fighters take their damage simultaneously, then destruction is
+		// resolved together as part of dealing it — so each dying creature is
+		// already in the discard before the other's "Destroyed:" ability (or the
+		// attacker's "After Fight") fires, and neither death changes the other's.
+		targets := []DamageTarget{{ID: defender, Amount: g.fightDamage(attacker, defender)}}
+		if !g.hasKeyword(attacker, Skirmish) {
+			targets = append(targets, DamageTarget{ID: attacker, Amount: dp})
+		}
+		g.dealDamage(g.owner(attacker), targets...)
+	}
+	g.triggerAbilities(attacker, TriggerAfterFight, 0, false)
+
+	// "After a creature is destroyed fighting X": when exactly one combatant is
+	// removed by the fight, the survivor's ability fires with the destroyed
+	// creature as `it`.
+	attackerDead, defenderDead := !g.inPlay(attacker), !g.inPlay(defender)
+	if defenderDead && !attackerDead {
+		g.triggerAbilities(attacker, TriggerAfterDestroyedFighting, defender, true)
+	}
+	if attackerDead && !defenderDead {
+		g.triggerAbilities(defender, TriggerAfterDestroyedFighting, attacker, true)
+	}
+}
+
+// onFlankOf reports whether a creature sits on a flank (the leftmost or rightmost
+// creature) of its owner's battleline.
+func (g *Game) onFlankOf(id LocalID) bool {
+	bl := g.State.Battleline[g.owner(id)].slice()
+	return len(bl) > 0 && (bl[0] == id || bl[len(bl)-1] == id)
+}
+
+// fightDamage returns the damage an attacker deals to the defender it fights: its
+// power, unless the card's AttackDamage overrides it (a Fixed amount) or adds a
+// bonus (which may be limited to a defender on a flank).
+func (g *Game) fightDamage(attacker, defender LocalID) int {
+	ad := g.cat.def(attacker).AttackDamage
+	if ad.Fixed {
+		return ad.Amount
+	}
+	dmg := g.Power(attacker)
+	if !ad.FlankOnly || g.onFlankOf(defender) {
+		dmg += ad.Amount
+	}
+	return dmg
+}
+
+// applyRawDamage records damage on a creature, letting armor absorb it first. It
+// only updates the damage counters; destruction is resolved by dealDamage, of
+// which this is the per-creature step.
+func (g *Game) applyRawDamage(id LocalID, amount int) {
+	if amount <= 0 {
+		return
+	}
+	core := &g.State.Cards[id]
+	absorbed := min(int(core.ArmorRemaining), amount)
+	if absorbed > 0 {
+		core.ArmorRemaining -= int16(absorbed)
+		amount -= absorbed
+		g.logf("%s's armor absorbs %d damage", g.Name(id), absorbed)
+	}
+	if amount > 0 {
+		core.Damage += int16(amount)
+		g.logf("%s takes %d damage (%d total)", g.Name(id), amount, core.Damage)
+	}
+}
+
+// DamageTarget pairs a creature with the amount of damage to deal it within a
+// single simultaneous batch (see dealDamage). It is exported because effects
+// build damage batches and pass them through the Resolver.
+type DamageTarget struct {
+	ID     LocalID
+	Amount int
+}
+
+// dealDamage deals damage to every target simultaneously: each creature takes its
+// damage (armor absorbs first) before any destruction is resolved, then all that
+// were dealt lethal damage are destroyed together, in an order the controller
+// chooses. Resolving destruction is part of dealing damage, so once dealDamage
+// returns the dead creatures are already in the discard.
+func (g *Game) dealDamage(controller int, targets ...DamageTarget) {
+	for _, t := range targets {
+		g.applyRawDamage(t.ID, t.Amount)
+	}
+	var dying []LocalID
+	for _, t := range targets {
+		if g.shouldDestroy(t.ID) {
+			dying = append(dying, t.ID)
+		}
+	}
+	g.destroyEach(controller, dying)
+}
+
+// shouldDestroy reports whether a creature is currently in a destroyable state:
+// its damage meets or exceeds its power, its power is zero or less, or it has
+// Poison and any damage on it.
+func (g *Game) shouldDestroy(id LocalID) bool {
+	def := g.cat.def(id)
+	if def.Type != Creature || !g.inPlay(id) {
+		return false
+	}
+	core := &g.State.Cards[id]
+	poisoned := g.hasKeyword(id, Poison) && core.Damage > 0
+	return int(core.Damage) >= g.Power(id) || g.Power(id) <= 0 || poisoned
+}

@@ -19,8 +19,9 @@ var GangerChieftain = card.New(
 	card.Provenance(card.CotA, 33),
 	card.WithTraits("Giant"),
 	card.WithPower(5),
-	card.WithAbility(card.Trigger.Play, card.OnChosenCreature{
-		Neighbors: true,
-		Verbs:     []card.CreatureVerb{card.ReadyVerb{}, card.FightVerb{}},
-	}),
+	card.WithAbility(
+		card.Trigger.Play, card.OnChooseCreature{
+			Target: card.Target.Creature.Neighboring(),
+			Verbs:  []card.CreatureVerb{card.ReadyVerb{}, card.FightVerb{}},
+		}),
 )

@@ -1,0 +1,25 @@
+package callofthearchons
+
+import "github.com/dmikalova/vactrol/internal/card"
+
+// Booby Trap
+//
+//	House:  Shadows
+//	Type:   Action
+//	Rarity: Uncommon
+//	Æmber:  1
+//
+//	Play: Deal 4 damage to a creature that is not on a flank and 2 damage to each of its neighbors.
+var BoobyTrap = card.New(
+	"Booby Trap",
+	card.House.Shadows,
+	card.Type.Action,
+	card.Rarity.Uncommon,
+	card.Provenance(card.CotA, 268),
+	card.WithAemberBonus(1),
+	card.WithAbility(
+		card.Trigger.Play, card.SplashDamage{
+			Amount: 4,
+			Splash: 2,
+		}),
+)

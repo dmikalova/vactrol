@@ -3,28 +3,41 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// flankPicker is a chooser that always picks a fixed creature.
-type flankPicker struct{ id engine.LocalID }
-
-func (f flankPicker) ChooseCreature(string, []engine.LocalID) (engine.LocalID, bool) {
-	return f.id, true
-}
-
-// Bulleteye's Reap destroys a chosen flank creature.
+// Bulleteye
+//
+//	House:  Shadows
+//	Type:   Creature
+//	Rarity: Rare
+//	Power:  2
+//	Traits: Elf • Thief
+//
+//	Elusive.
+//	Reap: Destroy a flank creature.
 func TestBulleteye(t *testing.T) {
-	g := cardtest.Started(t, engine.Shadows)
-	eye := g.AddToBattleline(Bulleteye, 0)
-	foe := g.AddToBattleline(cardtest.Vanilla("Foe", engine.Mars, 3), 1)
-	g.SetChooser(0, flankPicker{id: foe}) // a lone creature is on a flank
+	t.Run("Reap destroys a chosen flank creature, not a middle one", func(t *testing.T) {
+		var left, middle ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{
+				House:  card.House.Shadows,
+				InPlay: ct.Cards(Bulleteye),
+			},
+			P2: ct.Side{
+				InPlay: ct.Cards(
+					ct.Bind(&left, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(3))),
+					ct.Bind(&middle, ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(4))),
+					ct.Creature(ct.OfHouse(card.House.Mars), ct.Power(5)),
+				),
+			},
+		})
 
-	if err := g.Reap(0, eye); err != nil {
-		t.Fatalf("Reap: %v", err)
-	}
-	if len(g.Battleline(1)) != 0 {
-		t.Error("the flank creature should be destroyed")
-	}
+		h.P1.Reap(Bulleteye)
+		h.P1.ClickCard(left)
+
+		h.Expect(left).At(ct.Discard)
+		h.Expect(middle).At(ct.PlayArea)
+	})
 }

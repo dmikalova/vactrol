@@ -2,17 +2,14 @@ package tui
 
 import (
 	"fmt"
-	"math/rand"
 	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dmikalova/vactrol/internal/cards"
 	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/match"
 )
-
-const deckSize = 36
 
 // ---- messages ----
 
@@ -45,7 +42,7 @@ type teaChooser struct {
 	reply chan chooseReply
 }
 
-func (c *teaChooser) ChooseCreature(prompt string, candidates []engine.LocalID) (engine.LocalID, bool) {
+func (c *teaChooser) ChooseCreature(_, prompt string, candidates []engine.LocalID) (engine.LocalID, bool) {
 	if len(candidates) == 0 {
 		return 0, false
 	}
@@ -65,7 +62,7 @@ const (
 	phaseCreatureMenu                  // reap/fight/action menu for one of your creatures
 	phaseChoose                        // engine asked to pick a creature (on the board)
 	phaseTargetFight                   // picking an enemy to fight (on the board)
-	phaseDiscard                       // viewing the discard pile
+	phaseDiscard                       // viewing the discard zone
 	phaseBusy                          // an action is resolving
 	phaseOver                          // game finished
 	phaseConfirmExit                   // confirming leaving the game for the menu
@@ -117,9 +114,9 @@ type gameModel struct {
 	g       *engine.Game
 	chooser *teaChooser
 
-	player    int
-	phase     gamePhase
-	allHouses []engine.House // the deck's houses, sorted (house choices)
+	player     int
+	phase      gamePhase
+	deckHouses [2][]engine.House // each player's three deck houses (house choices)
 
 	cur      int // index into slots() during phaseMain
 	houseCur int
@@ -152,15 +149,14 @@ type gameModel struct {
 
 func newGameModel(snd *sender, w, h int) gameModel {
 	seed := time.Now().UnixNano()
-	g := engine.NewGame("Player 1", "Player 2", seed)
+	g, houses := match.New("Player 1", "Player 2", seed)
 	ch := &teaChooser{snd: snd, reply: make(chan chooseReply, 1)}
 	g.SetChooser(0, ch)
 	g.SetChooser(1, ch)
-	setupDecks(g, seed)
 	g.BeginTurn(0) // first turn: no Æmber yet, so forging never triggers here
 	m := gameModel{
 		snd: snd, g: g, chooser: ch,
-		player: 0, allHouses: deckHouses(), playHandPos: -1,
+		player: 0, deckHouses: houses, playHandPos: -1,
 		width: w, height: h,
 	}
 	return m.enterHousePhase()
@@ -169,43 +165,6 @@ func newGameModel(snd *sender, w, h int) gameModel {
 func (m gameModel) resize(w, h int) gameModel { m.width, m.height = w, h; return m }
 
 func (m gameModel) Init() tea.Cmd { return nil }
-
-// setupDecks builds each player's deck from the whole card pool (repeated to the
-// deck size), shuffles it, and deals an opening hand.
-func setupDecks(g *engine.Game, seed int64) {
-	pool := cards.All()
-	for player := 0; player < 2; player++ {
-		defs := make([]engine.CardDefinition, 0, deckSize)
-		for len(defs) < deckSize {
-			defs = append(defs, pool...)
-		}
-		defs = defs[:deckSize]
-		r := rand.New(rand.NewSource(seed + int64(player) + 1))
-		r.Shuffle(len(defs), func(i, j int) { defs[i], defs[j] = defs[j], defs[i] })
-		for i, d := range defs {
-			if i < engine.HandSize {
-				g.AddToHand(d, player)
-			} else {
-				g.AddToDeck(d, player)
-			}
-		}
-	}
-}
-
-// deckHouses returns the distinct houses in the card pool, sorted by name. You may
-// activate any of your deck's houses whether or not your hand holds one.
-func deckHouses() []engine.House {
-	seen := map[engine.House]bool{}
-	var out []engine.House
-	for _, d := range cards.All() {
-		if !seen[d.House] {
-			seen[d.House] = true
-			out = append(out, d.House)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
-	return out
-}
 
 // ---- slots: the flat, navigable list of on-screen cards ----
 
@@ -342,12 +301,12 @@ func (m gameModel) handleKey(k tea.KeyMsg) (gameModel, tea.Cmd) {
 func (m gameModel) handleHouseKey(k tea.KeyMsg) (gameModel, tea.Cmd) {
 	switch k.String() {
 	case "up", "k":
-		m.houseCur = wrap(m.houseCur, -1, len(m.allHouses))
+		m.houseCur = wrap(m.houseCur, -1, len(m.deckHouses[m.player]))
 	case "down", "l":
-		m.houseCur = wrap(m.houseCur, 1, len(m.allHouses))
+		m.houseCur = wrap(m.houseCur, 1, len(m.deckHouses[m.player]))
 	case "enter", " ":
-		if len(m.allHouses) > 0 {
-			_ = m.g.ChooseHouse(m.player, m.allHouses[m.houseCur])
+		if len(m.deckHouses[m.player]) > 0 {
+			_ = m.g.ChooseHouse(m.player, m.deckHouses[m.player][m.houseCur])
 			m.phase = phaseMain
 			m.cur = m.firstHandSlot()
 			m.status = ""
@@ -749,9 +708,9 @@ func (m gameModel) discardView() string {
 	opp := m.g.Discard(1 - m.player)
 	all := append(append([]engine.LocalID{}, you...), opp...)
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Discard piles") + "\n\n")
+	b.WriteString(titleStyle.Render("Discard zones") + "\n\n")
 	if len(all) == 0 {
-		b.WriteString(faintStyle.Render("  (both piles empty)") + "\n\n")
+		b.WriteString(faintStyle.Render("  (both zones empty)") + "\n\n")
 		b.WriteString(helpStyle.Render("esc/v back"))
 		return b.String()
 	}
@@ -845,7 +804,7 @@ func (m gameModel) bottom() string {
 	case phaseHouse:
 		var b strings.Builder
 		b.WriteString(headerStyle.Render("Choose a house") + "\n")
-		for i, h := range m.allHouses {
+		for i, h := range m.deckHouses[m.player] {
 			if i == m.houseCur {
 				b.WriteString(selectedStyle.Render(cursor(true)+h.String()) + "\n")
 			} else {
@@ -936,12 +895,37 @@ func (m gameModel) renderCardLine(def *engine.CardDefinition, sel bool, line str
 	return st.Render(line)
 }
 
+// nameColWidth returns the width of the card-name column: wide enough for the
+// longest name currently on either board or in either hand, so the house/type
+// columns line up even when a name is long. It never shrinks below 18.
+func (m gameModel) nameColWidth() int {
+	w := 18
+	consider := func(id engine.LocalID) {
+		if n := len(m.g.Def(id).Name); n > w {
+			w = n
+		}
+	}
+	for p := 0; p < 2; p++ {
+		for _, id := range m.g.Battleline(p) {
+			consider(id)
+		}
+		for _, id := range m.g.Artifacts(p) {
+			consider(id)
+		}
+		for _, id := range m.g.Hand(p) {
+			consider(id)
+		}
+	}
+	return w
+}
+
 func (m gameModel) renderCreatures(player int, selID engine.LocalID, hasSel bool) string {
 	bl := m.g.Battleline(player)
 	if len(bl) == 0 {
 		return faintStyle.Render("  (no creatures)") + "\n"
 	}
 	var b strings.Builder
+	w := m.nameColWidth()
 	for _, id := range bl {
 		def := m.g.Def(id)
 		state := "ready"
@@ -965,7 +949,7 @@ func (m gameModel) renderCreatures(player int, selID engine.LocalID, hasSel bool
 			kw = " [" + strings.Join(parts, ", ") + "]"
 		}
 		sel := hasSel && id == selID
-		line := fmt.Sprintf("%s%-18s %-7s %d power (%s%s%s)%s", cursor(sel), def.Name, def.House.String(), m.g.Power(id), state, dmg, amber, kw)
+		line := fmt.Sprintf("%s%-*s %-7s %d power (%s%s%s)%s", cursor(sel), w, def.Name, def.House.String(), m.g.Power(id), state, dmg, amber, kw)
 		line = m.renderCardLine(def, sel, line)
 		b.WriteString(line + "\n")
 		for _, up := range m.g.Upgrades(id) {
@@ -984,6 +968,7 @@ func (m gameModel) renderCreatures(player int, selID engine.LocalID, hasSel bool
 func (m gameModel) renderArtifacts(player int, selID engine.LocalID, hasSel bool) string {
 	arts := m.g.Artifacts(player)
 	var b strings.Builder
+	w := m.nameColWidth()
 	for _, id := range arts {
 		state := "ready"
 		if m.g.Exhausted(id) {
@@ -991,7 +976,7 @@ func (m gameModel) renderArtifacts(player int, selID engine.LocalID, hasSel bool
 		}
 		sel := hasSel && id == selID
 		def := m.g.Def(id)
-		line := fmt.Sprintf("%s%-18s %-7s artifact (%s)", cursor(sel), def.Name, def.House.String(), state)
+		line := fmt.Sprintf("%s%-*s %-7s artifact (%s)", cursor(sel), w, def.Name, def.House.String(), state)
 		line = m.renderCardLine(def, sel, line)
 		b.WriteString(line + "\n")
 	}
@@ -1004,10 +989,11 @@ func (m gameModel) renderHand(selHandIdx int) string {
 		return faintStyle.Render("  (empty)") + "\n"
 	}
 	var b strings.Builder
+	w := m.nameColWidth()
 	for _, sl := range slots {
 		def := m.g.Def(sl.id)
 		sel := sl.handIdx == selHandIdx
-		line := fmt.Sprintf("%s%-18s %-7s · %s", cursor(sel), def.Name, def.House.String(), def.Type)
+		line := fmt.Sprintf("%s%-*s %-7s · %s", cursor(sel), w, def.Name, def.House.String(), def.Type)
 		line = m.renderCardLine(def, sel, line)
 		b.WriteString(line + "\n")
 	}

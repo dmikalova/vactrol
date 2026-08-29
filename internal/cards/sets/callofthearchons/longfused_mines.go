@@ -21,8 +21,12 @@ var LongfusedMines = card.New(
 	card.WithAemberBonus(1),
 	card.WithTraits("Weapon"),
 	card.WithKeywords(card.Keyword.Versatile),
-	card.WithAbility(card.Trigger.Action, card.Sequence{Effects: []card.Effect{
-		card.Destroy{Target: card.Target.This},
-		card.DealDamage{Amount: 3, Target: card.Target.EachEnemyCreature.NotOnFlank()},
-	}}),
+	card.WithAbility(
+		card.Trigger.Action, card.Sequence{Effects: []card.Effect{
+			card.Destroy{Target: card.Target.This},
+			card.DealDamage{
+				Amount: 3,
+				Target: card.Target.EachEnemyCreature.NotOnFlank(),
+			},
+		}}),
 )

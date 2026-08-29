@@ -3,20 +3,28 @@ package callofthearchons
 import (
 	"testing"
 
-	"github.com/dmikalova/vactrol/internal/cards/cardtest"
-	"github.com/dmikalova/vactrol/internal/engine"
+	"github.com/dmikalova/vactrol/internal/card"
+	ct "github.com/dmikalova/vactrol/internal/cards/cardtest"
 )
 
-// Cannon's Action deals 2 damage to a creature the controller chooses.
+// Cannon
+//
+//	House:  Brobnar
+//	Type:   Artifact
+//	Rarity: Uncommon
+//	Traits: Weapon
+//
+//	Action: Deal 2 damage to a creature.
 func TestCannon(t *testing.T) {
-	g := cardtest.Started(t, engine.Brobnar)
-	art := g.AddArtifact(Cannon, 0)
-	target := g.AddToBattleline(cardtest.Vanilla("Target", engine.Untamed, 5), 1)
+	t.Run("deals 2 damage to a chosen creature", func(t *testing.T) {
+		var target ct.Card
+		h := ct.Play(t, ct.Setup{
+			P1: ct.Side{House: card.House.Brobnar, InPlay: ct.Cards(Cannon)},
+			P2: ct.Side{InPlay: ct.Cards(ct.Bind(&target, ct.Creature(ct.OfHouse(card.House.Untamed), ct.Power(5))))},
+		})
 
-	if err := g.UseAction(0, art); err != nil {
-		t.Fatalf("UseAction: %v", err)
-	}
-	if g.Damage(target) != 2 {
-		t.Errorf("damage = %d, want 2", g.Damage(target))
-	}
+		h.P1.UseAction(Cannon)
+
+		h.Expect(target).Damage(2)
+	})
 }

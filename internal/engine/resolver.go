@@ -31,19 +31,23 @@ type Resolver interface {
 	Artifacts(player int) []LocalID
 	// Hand returns a copy of a player's hand.
 	Hand(player int) []LocalID
-	// Discard returns a copy of a player's discard pile.
+	// Discard returns a copy of a player's discard zone.
 	Discard(player int) []LocalID
 	// Archives returns a copy of a player's archived cards.
 	Archives(player int) []LocalID
+	// Purge returns a copy of a player's purged cards.
+	Purge(player int) []LocalID
 	// IsCreature reports whether a card is a creature.
 	IsCreature(id LocalID) bool
+	// TypeOf returns a card's type.
+	TypeOf(id LocalID) CardType
 	// HasTrait reports whether a card has a trait.
 	HasTrait(id LocalID, trait Trait) bool
 	// House returns a card's house.
 	House(id LocalID) House
 	// Keys returns the number of keys a player has forged.
 	Keys(player int) int
-	// ForgeKey has a player forge one key at its current cost, if affordable.
+	// ForgeKey has a player forge one key at the current cost, if affordable.
 	ForgeKey(player int)
 
 	// ---- single-card / pool changes ----
@@ -58,6 +62,9 @@ type Resolver interface {
 	SetExhausted(id LocalID, exhausted bool)
 	// AddAmberOn changes the Æmber sitting on a card.
 	AddAmberOn(id LocalID, delta int)
+	// AddPowerCounter changes the net power counters on a creature, adjusting its
+	// power for as long as it stays in play.
+	AddPowerCounter(id LocalID, delta int)
 
 	// ---- compound actions the engine coordinates ----
 
@@ -79,22 +86,50 @@ type Resolver interface {
 	// ArchiveTopOfDeck moves the top card of a player's deck to their archives,
 	// reporting whether a card was available.
 	ArchiveTopOfDeck(player int) bool
-	// DiscardArchives moves all of a player's archived cards to their discard pile.
+	// DiscardArchives moves all of a player's archived cards to their discard zone.
 	// The active player performs the discard, so they choose the order for their own
 	// archives but get a random order for an opponent's (which they cannot see).
 	DiscardArchives(owner int)
+	// PurgeFromDiscard moves a card from a player's discard zone to their purge zone
+	// (set aside out of the game).
+	PurgeFromDiscard(owner int, id LocalID)
+	// PurgeFromHand moves a card from a player's hand to their purge zone (set aside
+	// out of the game).
+	PurgeFromHand(owner int, id LocalID)
+	// PurgeFromPlay moves a card from play to its owner's purge zone (set aside out
+	// of the game).
+	PurgeFromPlay(id LocalID)
 	// ReturnFromDiscardToHand moves a card from its owner's discard to their hand.
 	ReturnFromDiscardToHand(id LocalID)
 	// ReturnFromDiscardToTopOfDeck moves a card from its owner's discard to the top
 	// of their deck.
 	ReturnFromDiscardToTopOfDeck(id LocalID)
+	// DiscardCardFromHand moves a specific card from a player's hand to their discard
+	// zone.
+	DiscardCardFromHand(owner int, id LocalID)
+	// CannotFightNextTurn bars a player from using creatures to fight throughout
+	// their next turn.
+	CannotFightNextTurn(player int)
+	// GrantFightForHouse lets a player use creatures of the given house to fight
+	// this turn even out of the active house.
+	GrantFightForHouse(player int, house House)
+	// AddLasting registers a "for the remainder of the turn" effect (Full Moon,
+	// Charge!, Crystal Hive reactions; Dimension Door's replacement) on a game event,
+	// instead of the effect hardcoding itself into the play or reap path.
+	AddLasting(on Event, do lastingAction, controller, amount int)
+	// ForceActiveHouseNextTurn makes a player have to choose the given house as their
+	// active house on their next turn.
+	ForceActiveHouseNextTurn(player int, house House)
 	// OrderByChoice lets a player arrange ids into a resolution order.
 	OrderByChoice(controller int, prompt string, ids []LocalID) []LocalID
-	// ChooseCreature asks a player to pick one creature from candidates.
-	ChooseCreature(player int, prompt string, candidates []LocalID) (LocalID, bool)
+	// ChooseCreature asks a player to pick one creature from candidates; a sole
+	// candidate is taken automatically. source is the card whose ability is asking
+	// (usually ctx.Source), for prompt attribution.
+	ChooseCreature(player int, source LocalID, prompt string, candidates []LocalID) (LocalID, bool)
 	// ChooseOption asks a player to pick one of several labeled options, returning
-	// its index (0 when the player's chooser expresses no preference).
-	ChooseOption(player int, prompt string, options []string) int
+	// its index (0 when the player's chooser expresses no preference). source is the
+	// card whose ability is asking (usually ctx.Source), for prompt attribution.
+	ChooseOption(player int, source LocalID, prompt string, options []string) int
 	// FightWith makes attacker fight defender (ability-driven, ignoring active
 	// player and house). A creature can only be used while ready, so an exhausted
 	// attacker may be chosen but does nothing.
@@ -109,6 +144,10 @@ type Resolver interface {
 	UseActionOf(id LocalID)
 	// HasAction reports whether a card has an "Action:" ability.
 	HasAction(id LocalID) bool
+	// Exhausted reports whether a creature is exhausted.
+	Exhausted(id LocalID) bool
+	// Stunned reports whether a creature is stunned.
+	Stunned(id LocalID) bool
 	// Logf writes a line to the game log.
 	Logf(format string, args ...any)
 }
@@ -127,10 +166,13 @@ func (g *Game) HasTrait(id LocalID, trait Trait) bool { return g.cat.def(id).has
 func (g *Game) House(id LocalID) House { return g.cat.def(id).House }
 
 // ForgeKey has a player forge one key at its current cost, if affordable.
-func (g *Game) ForgeKey(player int) { g.forgeOneKey(player) }
+func (g *Game) ForgeKey(player int) { g.forgeKey(player) }
 
 // IsCreature reports whether a card is a creature.
 func (g *Game) IsCreature(id LocalID) bool { return g.cat.def(id).Type == Creature }
+
+// TypeOf returns a card's type.
+func (g *Game) TypeOf(id LocalID) CardType { return g.cat.def(id).Type }
 
 // SetAember sets a player's Æmber pool, clamped at zero.
 func (g *Game) SetAember(player, amount int) {
@@ -183,10 +225,24 @@ func (g *Game) ArchiveFromHand(id LocalID) { g.archiveFromHand(g.owner(id), id) 
 // ArchiveTopOfDeck moves the top card of a player's deck to their archives.
 func (g *Game) ArchiveTopOfDeck(player int) bool { return g.archiveTopOfDeck(player) }
 
-// DiscardArchives moves all of a player's archived cards to their discard pile.
+// DiscardArchives moves all of a player's archived cards to their discard zone.
 func (g *Game) DiscardArchives(owner int) { g.discardArchives(owner) }
 
-// ReturnFromDiscardToHand moves a card from its owner's discard pile to their hand.
+// PurgeFromDiscard moves a card from a player's discard zone to their purge zone.
+func (g *Game) PurgeFromDiscard(owner int, id LocalID) { g.purgeFromDiscard(owner, id) }
+
+// PurgeFromHand moves a card from a player's hand to their purge zone.
+func (g *Game) PurgeFromHand(owner int, id LocalID) { g.purgeFromHand(owner, id) }
+
+// PurgeFromPlay is the Resolver entry point for purgeFromPlay.
+func (g *Game) PurgeFromPlay(id LocalID) { g.purgeFromPlay(id) }
+
+// AddPowerCounter changes the net power counters on a creature.
+func (g *Game) AddPowerCounter(id LocalID, delta int) {
+	g.State.Cards[id].PowerCounters += int16(delta)
+}
+
+// ReturnFromDiscardToHand moves a card from its owner's discard zone to their hand.
 func (g *Game) ReturnFromDiscardToHand(id LocalID) {
 	o := g.owner(id)
 	g.State.Discard[o].remove(id)
@@ -194,7 +250,7 @@ func (g *Game) ReturnFromDiscardToHand(id LocalID) {
 	g.logf("%s returns %s from their discard to hand", g.names[o], g.Name(id))
 }
 
-// ReturnFromDiscardToTopOfDeck moves a card from its owner's discard pile to the
+// ReturnFromDiscardToTopOfDeck moves a card from its owner's discard zone to the
 // top of their deck.
 func (g *Game) ReturnFromDiscardToTopOfDeck(id LocalID) {
 	o := g.owner(id)
@@ -208,19 +264,40 @@ func (g *Game) OrderByChoice(controller int, prompt string, ids []LocalID) []Loc
 	return g.orderByChoice(controller, prompt, ids)
 }
 
-// ChooseCreature asks a player to choose one creature from candidates.
-func (g *Game) ChooseCreature(player int, prompt string, candidates []LocalID) (LocalID, bool) {
-	return g.chooserFor(player).ChooseCreature(prompt, candidates)
+// ChooseCreature asks a player to choose one creature from candidates, attributing
+// the prompt to the source card. A sole candidate is taken automatically.
+func (g *Game) ChooseCreature(player int, source LocalID, prompt string, candidates []LocalID) (LocalID, bool) {
+	return g.pickCreature(player, g.sourceName(source), prompt, candidates)
 }
 
-// ChooseOption asks a player to choose one of several labeled options. If the
-// player's chooser expresses no preference (does not implement OptionChooser),
-// the first option is taken.
-func (g *Game) ChooseOption(player int, prompt string, options []string) int {
+// ChooseOption asks a player to choose one of several labeled options, attributing
+// the prompt to the source card. If the player's chooser expresses no preference
+// (does not implement OptionChooser), the first option is taken.
+func (g *Game) ChooseOption(player int, source LocalID, prompt string, options []string) int {
+	return g.chooseOption(player, g.sourceName(source), prompt, options)
+}
+
+// chooseOption is the shared option-choice path: it attributes the prompt to a
+// source name (empty for a source-less prompt such as a turn-structure choice)
+// and defaults to the first option when the chooser has no preference. A sole
+// option is taken automatically without consulting the chooser.
+func (g *Game) chooseOption(player int, source, prompt string, options []string) int {
+	if len(options) == 1 {
+		return 0
+	}
 	if oc, ok := g.chooserFor(player).(OptionChooser); ok {
-		return oc.ChooseOption(prompt, options)
+		return oc.ChooseOption(source, prompt, options)
 	}
 	return 0
+}
+
+// sourceName returns the name of a source card for prompt attribution, or "" when
+// the id is not a registered card (e.g. an unset source in a unit test).
+func (g *Game) sourceName(source LocalID) string {
+	if int(source) < len(g.cat.defs) {
+		return g.cat.defs[source].Name
+	}
+	return ""
 }
 
 // FightWith makes attacker fight defender, ability-driven (ignoring active player

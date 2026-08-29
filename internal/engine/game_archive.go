@@ -1,0 +1,67 @@
+package engine
+
+// This file holds the archives zone: taking archived cards into hand at the
+// start of a turn, archiving from hand or the top of the deck, and discarding a
+// whole archive.
+
+// offerArchives asks a player — after they have chosen their house — whether to
+// take their archived cards into their hand, moving the archives to hand if they
+// accept. A player with no archived cards is not prompted.
+func (g *Game) offerArchives(player int) {
+	arc := &g.State.Archives[player]
+	if arc.Count == 0 {
+		return
+	}
+	if g.chooseOption(player, "", "Take your archived cards into your hand?", []string{"Take them", "Leave them archived"}) != 0 {
+		return
+	}
+	n := arc.Count
+	for _, id := range arc.slice() {
+		g.State.Hand[player].add(id)
+	}
+	*arc = CardList{}
+	g.logf("%s takes %d card(s) from their archives into hand", g.names[player], n)
+}
+
+// archiveFromHand moves a card from a player's hand to their archives.
+func (g *Game) archiveFromHand(player int, id LocalID) {
+	if g.State.Hand[player].remove(id) {
+		g.State.Archives[player].add(id)
+		g.logf("%s archives a card", g.names[player])
+	}
+}
+
+// archiveTopOfDeck moves the top card of a player's deck to their archives,
+// reporting whether a card was available to archive.
+func (g *Game) archiveTopOfDeck(player int) bool {
+	deck := &g.State.Deck[player]
+	if deck.Count == 0 {
+		return false
+	}
+	id := deck.removeAt(0)
+	g.State.Archives[player].add(id)
+	g.logf("%s archives the top card of their deck", g.names[player])
+	return true
+}
+
+// discardArchives moves all of a player's archived cards to their discard zone.
+// The active player performs the discard, so they choose the order when it is
+// their own archives but cannot when it is an opponent's — those enter the
+// discard in a random order, since the active player cannot see them.
+func (g *Game) discardArchives(owner int) {
+	arc := &g.State.Archives[owner]
+	if arc.Count == 0 {
+		return
+	}
+	ids := cloneIDs(arc.slice())
+	if owner == g.State.ActivePlayer {
+		ids = g.orderByChoice(owner, "Choose the order to discard your archives", ids)
+	} else {
+		g.rng.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
+	}
+	*arc = CardList{}
+	for _, id := range ids {
+		g.State.Discard[owner].add(id)
+	}
+	g.logf("%s discards %d archived card(s)", g.names[owner], len(ids))
+}

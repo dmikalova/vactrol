@@ -73,10 +73,39 @@ func TestReturnToArchivesEffect(t *testing.T) {
 	if g.State.Archives[0].Count != 1 || g.State.Archives[0].IDs[0] != src {
 		t.Errorf("creature should be archived, got %v", g.State.Archives[0].IDs[:g.State.Archives[0].Count])
 	}
-	if len(g.Discard(0)) != 1 { // the upgrade sheds to the discard pile
+	if len(g.Discard(0)) != 1 { // the upgrade sheds to the discard zone
 		t.Errorf("upgrade should be discarded; discard = %v", g.Discard(0))
 	}
 	if g.State.Cards[src].Damage != 0 {
 		t.Error("archiving should clear the creature's in-play state")
+	}
+}
+
+func TestReturnArtifactsToHand(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	a1 := g.AddArtifact(exAutocannon(), 0)
+	a2 := g.AddArtifact(exAutocannon(), 1)
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+
+	e := ReturnArtifactsToHand{Max: 3}
+	if e.Text() != "put up to 3 artifacts into their owners' hands" {
+		t.Errorf("text = %q", e.Text())
+	}
+	// Only two artifacts exist, so the loop stops when none remain (below Max).
+	e.Resolve(ctx)
+	if g.inPlay(a1) || g.inPlay(a2) {
+		t.Error("both artifacts should have left play")
+	}
+	if g.State.Hand[0].Count != 1 || g.State.Hand[1].Count != 1 {
+		t.Errorf("hands = %d/%d, want 1/1 (each returned to its owner)", g.State.Hand[0].Count, g.State.Hand[1].Count)
+	}
+
+	// Choosing "Done" (the option past the sole artifact) stops early, leaving it.
+	g2 := NewGame("A", "B", 1)
+	art := g2.AddArtifact(exAutocannon(), 0)
+	g2.SetChooser(0, optionPicker{idx: 1}) // index 0 is the artifact, 1 is "Done"
+	ReturnArtifactsToHand{Max: 3}.Resolve(&EffectContext{Resolver: g2, Controller: 0})
+	if !g2.inPlay(art) {
+		t.Error("choosing Done should leave the artifact in play")
 	}
 }

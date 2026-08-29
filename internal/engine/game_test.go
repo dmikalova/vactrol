@@ -173,6 +173,28 @@ func TestPlayUpgradeErrorsAndSuccess(t *testing.T) {
 	}
 }
 
+func TestPlayUpgradeFiresPlayAbility(t *testing.T) {
+	g := started(t)
+	host := g.AddToBattleline(testCreature("host", 5), 0)
+	g.State.Cards[host].Damage = 3
+	// The upgrade carries a non-Play ability (must be skipped on attach) and a
+	// Play ability that acts on its host.
+	up := NewCard("Test Boots", Brobnar, Upgrade, Rare,
+		WithAbility(TriggerAfterReap, GainAember{Player: Controller, Amount: 1}),
+		WithAbility(TriggerAfterPlay, Heal{Fully: true, Target: Target{Kind: TargetThisCreature}}))
+	g.AddToHand(up, 0)
+	before := g.Aember(0)
+	if _, err := g.PlayUpgrade(0, 0); err != nil {
+		t.Fatalf("PlayUpgrade: %v", err)
+	}
+	if g.Damage(host) != 0 {
+		t.Errorf("host damage = %d, want 0 (upgrade Play fully heals its host)", g.Damage(host))
+	}
+	if g.Aember(0) != before {
+		t.Errorf("non-Play ability must not fire on attach; aember %d -> %d", before, g.Aember(0))
+	}
+}
+
 func TestDiscardFromHand(t *testing.T) {
 	g := started(t)
 	// Wrong house.
@@ -211,23 +233,89 @@ func TestForgeKeyWins(t *testing.T) {
 	// Giant on board so the after-forge trigger fires; a tough enemy survives.
 	g.AddToBattleline(exGiant(), 0)
 	enemy := g.AddToBattleline(testCreature("enemy", 10), 1)
+
+	// Only one key is forged at the start of a turn, even with Æmber to spare.
 	g.State.Aember[0] = 3 * KeyCost
 	g.BeginTurn(0)
-	if g.Keys(0) != KeysToWin {
-		t.Errorf("keys = %d, want %d", g.Keys(0), KeysToWin)
+	if g.Keys(0) != 1 {
+		t.Errorf("keys = %d, want 1 (one key forged per turn)", g.Keys(0))
 	}
-	if g.Winner() != 0 {
-		t.Errorf("winner = %d, want 0", g.Winner())
+	if g.Aember(0) != 2*KeyCost {
+		t.Errorf("aember = %d, want %d (paid for exactly one key)", g.Aember(0), 2*KeyCost)
 	}
-	// The giant deals 2 damage per forged key: 3 keys => 6 damage.
-	if g.Damage(enemy) != 6 {
-		t.Errorf("enemy damage = %d, want 6", g.Damage(enemy))
+	// The giant's after-forge trigger fired once: 2 damage.
+	if g.Damage(enemy) != 2 {
+		t.Errorf("enemy damage = %d, want 2", g.Damage(enemy))
 	}
+
+	// Forging the third key wins the game.
+	g.State.Keys[0] = 2
+	g.State.Aember[0] = KeyCost
+	g.forgeKey(0)
+	if g.Keys(0) != KeysToWin || g.Winner() != 0 {
+		t.Errorf("keys = %d, winner = %d, want %d and 0", g.Keys(0), g.Winner(), KeysToWin)
+	}
+
 	// BeginTurn after a win is a no-op.
 	turn := g.State.Turn
 	g.BeginTurn(1)
 	if g.State.Turn != turn {
 		t.Error("BeginTurn should be a no-op once the game is over")
+	}
+}
+
+func TestKeyCost(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	if c := g.keyCost(0); c != KeyCost {
+		t.Errorf("base keyCost = %d, want %d", c, KeyCost)
+	}
+
+	// An opponent-affecting change on player 1's card raises player 0's key cost,
+	// not player 1's own.
+	g.AddToBattleline(NewCard("Jammer", Mars, Creature, Common, WithPower(4),
+		WithKeyCost(NewKeyCostChange(Opponent, 1))), 1)
+	if c := g.keyCost(0); c != KeyCost+1 {
+		t.Errorf("keyCost(0) = %d, want %d", c, KeyCost+1)
+	}
+	if c := g.keyCost(1); c != KeyCost {
+		t.Errorf("keyCost(1) = %d, want %d (opponent-only change spares its controller)", c, KeyCost)
+	}
+
+	// An upgrade granting the change on player 1's creature stacks with it.
+	host := g.AddToBattleline(NewCard("Host", Mars, Creature, Common, WithPower(3)), 1)
+	attachUpgrade(g, host, NewCard("Pack", Mars, Upgrade, Uncommon,
+		WithStatic(StaticModifier{KeyCostChange: NewKeyCostChange(Opponent, 2)})))
+	if c := g.keyCost(0); c != KeyCost+3 {
+		t.Errorf("keyCost(0) with jammer + pack = %d, want %d", c, KeyCost+3)
+	}
+
+	// EachPlayer affects both players; Controller affects only the card's owner.
+	g2 := NewGame("A", "B", 1)
+	g2.AddToBattleline(NewCard("Toll", Dis, Creature, Common, WithPower(3),
+		WithKeyCost(NewKeyCostChange(EachPlayer, 1))), 0)
+	if g2.keyCost(0) != KeyCost+1 || g2.keyCost(1) != KeyCost+1 {
+		t.Errorf("each-player change = %d/%d, want %d each", g2.keyCost(0), g2.keyCost(1), KeyCost+1)
+	}
+	g2.AddToBattleline(NewCard("SelfTax", Dis, Creature, Common, WithPower(3),
+		WithKeyCost(NewKeyCostChange(Controller, 2))), 1) // Controller = the card's owner
+	if g2.keyCost(1) != KeyCost+1+2 || g2.keyCost(0) != KeyCost+1 {
+		t.Errorf("unset (controller) change = %d/%d, want %d/%d", g2.keyCost(0), g2.keyCost(1), KeyCost+1, KeyCost+3)
+	}
+
+	// Forging respects the raised cost: one Æmber short forges nothing.
+	g.State.Aember[0] = KeyCost + 2
+	g.forgeKey(0)
+	if g.Keys(0) != 0 {
+		t.Errorf("keys = %d, want 0 (below the raised cost)", g.Keys(0))
+	}
+	// At exactly the cost it forges one key, paying the full raised amount.
+	g.State.Aember[0] = KeyCost + 3
+	g.forgeKey(0)
+	if g.Keys(0) != 1 {
+		t.Errorf("keys = %d, want 1", g.Keys(0))
+	}
+	if g.Aember(0) != 0 {
+		t.Errorf("aember = %d, want 0 (paid the full raised cost)", g.Aember(0))
 	}
 }
 
@@ -293,12 +381,12 @@ func TestAccessorsAndChooser(t *testing.T) {
 
 	// Nil chooser falls back to the default (FirstChooser).
 	g.SetChooser(0, nil)
-	got, ok := g.ChooseCreature(0, "p", []LocalID{id})
+	got, ok := g.ChooseCreature(0, id, "p", []LocalID{id})
 	if !ok || got != id {
 		t.Errorf("default chooser = (%d,%v)", got, ok)
 	}
 	// Empty candidate list.
-	if _, ok := g.ChooseCreature(0, "p", nil); ok {
+	if _, ok := g.ChooseCreature(0, id, "p", nil); ok {
 		t.Error("empty candidates should return ok=false")
 	}
 }
@@ -386,5 +474,10 @@ func TestOrderByChoice(t *testing.T) {
 	g.SetChooser(0, orderRejectChooser{})
 	if got := g.OrderByChoice(0, "p", ids); !eq(got, []LocalID{10, 20, 30}) {
 		t.Errorf("reject order = %v", got)
+	}
+	// An Orderer chooser arranges the ids in a single call.
+	g.SetChooser(0, orderAllChooser{})
+	if got := g.OrderByChoice(0, "p", ids); !eq(got, []LocalID{30, 20, 10}) {
+		t.Errorf("orderer order = %v", got)
 	}
 }

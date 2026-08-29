@@ -17,9 +17,10 @@ var EMPBlast = card.New(
 	card.Rarity.Uncommon,
 	card.Provenance(card.CotA, 163),
 	card.WithAemberBonus(1),
-	card.WithAbility(card.Trigger.Play, card.Sequence{Effects: []card.Effect{
-		card.Stun{Target: card.Target.EachCreature.OfHouse(card.House.Mars)},
-		card.Stun{Target: card.Target.EachCreature.WithTrait("Robot")},
-		card.Destroy{Target: card.Target.EachArtifact},
-	}}),
+	card.WithAbility(
+		card.Trigger.Play, card.Sequence{Effects: []card.Effect{
+			card.Stun{Target: card.Target.EachCreature.OfHouse(card.House.Mars)},
+			card.Stun{Target: card.Target.EachCreature.WithTrait("Robot")},
+			card.Destroy{Target: card.Target.EachArtifact},
+		}}),
 )
