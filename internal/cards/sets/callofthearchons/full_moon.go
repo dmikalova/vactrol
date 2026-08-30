@@ -18,6 +18,9 @@ var FullMoon = card.New(
 	card.WithAbility(
 		card.Trigger.Play, card.ForRemainderOfTurn{
 			On: card.Event.CreaturePlayed,
-			Do: card.GainAember{Player: card.Controller, Amount: 1},
+			Do: card.GainAember{
+				Player: card.Controller,
+				Amount: 1,
+			},
 		}),
 )

@@ -200,10 +200,13 @@ aside.
 
 ### Capture Æmber
 
-Capturing Æmber moves it from the opponent's pool onto the capturing creature.
-Captured Æmber sits on the creature and counts for no player — it is out of
-every pool until the creature leaves play, at which point it goes to the pool
-of the creature's controller's opponent. You can only capture what the opponent has.
+Capturing Æmber moves it from a player's pool onto a capturing creature, where
+it counts for no player until that creature leaves play, at which point it goes
+to the pool of the capturing creature's controller's opponent. A creature can
+only capture what the Source pool holds. Target is the creature that captures
+(this creature by default); Source is the pool the Æmber comes from; Per repeats
+the capture, choosing a fresh Target each time (Hypnotic Command captures once
+for each friendly Mars creature).
 
 ### Choose One
 
@@ -278,8 +281,10 @@ no damage is unaffected), and it never changes a creature's power.
 ### Lose Æmber
 
 To lose Æmber, a player returns that many Æmber from their pool to the common
-supply. A pool can never go below zero, so a player told to lose more Æmber
-than they have simply loses all of it.
+supply. A pool can never go below zero, so a player told to lose more Æmber than
+they have simply loses all of it. Player may be EachPlayer, so both players lose.
+The amount lost is either a fixed Amount or a By loss of the pool (By: Half,
+By: AllBut(5)) — set one, not both.
 
 ### May
 
@@ -300,12 +305,38 @@ leaves for the named zone as it is destroyed, so it never reaches the discard
 pile. When several cards move to the top of the deck at once the controller
 chooses the order they stack.
 
-### Reduce Æmber
+### Ready
 
-Some effects cap both pools at once: every player holding more than Keep Æmber
-loses the excess and is left with exactly Keep, while a player already at or
-below Keep is untouched. This reins in a runaway leader without punishing a
-player who has been spending.
+Readying a creature turns it upright again so it can be used, the opposite of
+exhausting. It readies each creature the effect targets.
+
+### Redirect Fight Damage
+
+RedirectFightDamage is a "Before Fight" effect: the controller chooses a
+creature (its Target), and the attacker deals its own fight damage to that
+creature instead of to the creature it is fighting (Gabos Longarms). It only
+redirects the attacker's outgoing fight damage — the attacker still takes
+damage back from the creature it fights. The chosen creature is stored on the
+game state for the fight in progress; the combat step reads and clears it.
+
+### Return Named Card to Hand
+
+ReturnNamedToHand puts a card with a specific name that the controller chooses
+into their hand, taken either from a friendly creature in play or from their
+discard pile — Faygin recovering an Urchin. The controller chooses among both
+zones at once; an in-play creature returns to hand (shedding its in-play state)
+and a discard card is recovered.
+
+### Search for Named Card
+
+SearchForName lets the controller search their deck and discard pile for a card
+with a specific name, reveal it, and put it into their hand — Help from Future
+Self tutoring a Timetraveller. Nothing happens if no matching card is found.
+
+### Shuffle Discard
+
+ShuffleDiscard shuffles the controller's discard pile into their deck (Help from
+Future Self, after tutoring).
 
 ### Steal Æmber
 

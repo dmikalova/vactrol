@@ -65,3 +65,33 @@ func TestRepeatWhile(t *testing.T) {
 		t.Errorf("validate = %v", err)
 	}
 }
+
+func TestMayRepeat(t *testing.T) {
+	e := MayRepeat{Cond: OpponentAemberMoreThanYou{}, Do: StealAember{Amount: 1}}
+	if got := e.Text(); got != "steal 1 Æmber -> if your opponent has more Æmber than you, you may repeat this effect" {
+		t.Errorf("text = %q", got)
+	}
+
+	// Accepting every offer repeats until the condition fails.
+	g := NewGame("A", "B", 1)
+	g.State.Aember[0], g.State.Aember[1] = 0, 5 // opponent leads
+	g.SetChooser(0, optionPicker{idx: 0})       // always "Yes"
+	e.Resolve(&EffectContext{Resolver: g, Controller: 0})
+	// 5/0 -> 4/1 -> 3/2 -> 2/3 (opponent no longer leads): Do once plus 2 repeats.
+	if g.Aember(0) != 3 || g.Aember(1) != 2 {
+		t.Errorf("accepted: you=%d opp=%d, want 3/2", g.Aember(0), g.Aember(1))
+	}
+
+	// Declining the first offer runs Do exactly once even though the condition holds.
+	g2 := NewGame("A", "B", 1)
+	g2.State.Aember[0], g2.State.Aember[1] = 0, 5
+	g2.SetChooser(0, optionPicker{idx: 1}) // "No"
+	e.Resolve(&EffectContext{Resolver: g2, Controller: 0})
+	if g2.Aember(0) != 1 || g2.Aember(1) != 4 {
+		t.Errorf("declined: you=%d opp=%d, want 1/4", g2.Aember(0), g2.Aember(1))
+	}
+
+	if err := validateEffect(MayRepeat{Cond: InPlay{Player: Controller, Type: Creature}, Do: StealAember{Amount: 1}}); err != nil {
+		t.Errorf("validate = %v", err)
+	}
+}

@@ -64,29 +64,39 @@ func (g *Game) discardUpgrades(id LocalID) {
 
 // destroyTogether destroys several creatures as one simultaneous event, matching
 // KeyForge timing. Every creature remains in play while all of their Destroyed
-// abilities are collected; the active player orders those abilities, and a creature
-// that leaves play (e.g. Annihilation Ritual purges it) cannot resolve any of its
-// remaining abilities. Then every creature still in play goes to its discard pile.
+// abilities are collected; the active player resolves those abilities in an order
+// they choose — one creature at a time (its creatures highlight for selection),
+// and, for a creature carrying more than one Destroyed ability, choosing which of
+// its abilities resolves next. A creature that leaves play (e.g. Annihilation
+// Ritual purges it) cannot resolve any of its remaining abilities. Then every
+// creature still in play goes to its discard pile.
 func (g *Game) destroyTogether(controller int, ids []LocalID) {
 	for _, id := range ids {
 		g.logf("%s is destroyed", g.Name(id))
 	}
 	pending := g.destroyedAbilities(ids)
-	for len(pending) > 0 {
-		idx := 0
-		if len(pending) > 1 {
-			labels := make([]string, len(pending))
-			for i, ab := range pending {
-				labels[i] = g.Name(ab.source) + ": " + renderAbilityLine(g.cat.def(ab.source), ab.ability)
+	for {
+		// Drop abilities whose source has left play (e.g. an earlier Destroyed
+		// ability purged the creature); they can no longer resolve.
+		pending = g.inPlayAbilities(pending)
+		if len(pending) == 0 {
+			break
+		}
+		// Choose the next creature whose Destroyed ability to resolve. With several
+		// destroyed creatures still holding abilities the controller picks one (they
+		// highlight on the board); a lone creature is forced.
+		sources := distinctSources(pending)
+		src := sources[0]
+		if len(sources) > 1 {
+			if chosen, ok := g.pickCreature(controller, "", "Choose the next creature whose Destroyed ability resolves", sources); ok {
+				src = chosen
 			}
-			idx = g.chooseOption(controller, "", "Choose the next Destroyed ability to resolve", labels)
 		}
-		ab := pending[idx]
-		if g.inPlay(ab.source) {
-			g.logf("%s: %s", g.Name(ab.source), renderAbilityLine(g.cat.def(ab.source), ab.ability))
-			ab.ability.Effect.Resolve(&EffectContext{Resolver: g, Source: ab.source, Controller: g.owner(ab.source)})
-		}
-		pending = append(pending[:idx], pending[idx+1:]...)
+		pick := g.pickDestroyedAbility(controller, pending, src)
+		ab := pending[pick]
+		g.logf("%s: %s", g.Name(ab.source), renderAbilityLine(g.cat.def(ab.source), ab.ability))
+		ab.ability.Effect.Resolve(&EffectContext{Resolver: g, Source: ab.source, Controller: g.owner(ab.source)})
+		pending = append(pending[:pick], pending[pick+1:]...)
 	}
 	for _, id := range ids {
 		if g.inPlay(id) {
@@ -95,11 +105,59 @@ func (g *Game) destroyTogether(controller int, ids []LocalID) {
 	}
 }
 
-// destroyEach destroys each creature in ids simultaneously, letting the
-// controller choose the order their "Destroyed:" abilities resolve. Callers pass
-// a snapshot of distinct ids, so each is destroyed once.
+// inPlayAbilities keeps only the pending abilities whose source is still in play.
+func (g *Game) inPlayAbilities(pending []triggeredAbility) []triggeredAbility {
+	var kept []triggeredAbility
+	for _, ab := range pending {
+		if g.inPlay(ab.source) {
+			kept = append(kept, ab)
+		}
+	}
+	return kept
+}
+
+// distinctSources lists the distinct source creatures in pending, first-seen order.
+func distinctSources(pending []triggeredAbility) []LocalID {
+	var out []LocalID
+	for _, ab := range pending {
+		seen := false
+		for _, id := range out {
+			if id == ab.source {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			out = append(out, ab.source)
+		}
+	}
+	return out
+}
+
+// pickDestroyedAbility returns the pending index of the Destroyed ability to
+// resolve next for src: forced when the creature carries one, otherwise the
+// controller picks which of its abilities via a labeled prompt.
+func (g *Game) pickDestroyedAbility(controller int, pending []triggeredAbility, src LocalID) int {
+	var idxs []int
+	for i, ab := range pending {
+		if ab.source == src {
+			idxs = append(idxs, i)
+		}
+	}
+	if len(idxs) == 1 {
+		return idxs[0]
+	}
+	labels := make([]string, len(idxs))
+	for i, j := range idxs {
+		labels[i] = renderAbilityLine(g.cat.def(src), pending[j].ability)
+	}
+	return idxs[g.chooseOption(controller, "", "Choose which Destroyed ability resolves", labels)]
+}
+
+// destroyEach destroys each creature in ids simultaneously (KeyForge's shared
+// Destroyed timing), letting the controller order how their "Destroyed:" abilities
+// resolve. Callers pass a snapshot of distinct ids, so each is destroyed once.
 func (g *Game) destroyEach(controller int, ids []LocalID) {
-	ids = g.orderByChoice(controller, "Choose the next creature to destroy", ids)
 	g.destroyTogether(controller, ids)
 }
 
@@ -137,4 +195,17 @@ func (g *Game) moveToArchives(id LocalID) {
 	g.resetCore(id)
 	g.State.Archives[o].add(id)
 	g.logf("%s is put into %s's archives", g.Name(id), g.names[o])
+}
+
+// moveToDeckShuffled removes a card from play and shuffles it into its owner's
+// deck, clearing the per-match state it accrued while in play.
+func (g *Game) moveToDeckShuffled(id LocalID) {
+	o := g.owner(id)
+	g.State.Battleline[o].remove(id)
+	g.State.Artifacts[o].remove(id)
+	g.discardUpgrades(id)
+	g.resetCore(id)
+	g.State.Deck[o].add(id)
+	g.Shuffle(o)
+	g.logf("%s is shuffled into %s's deck", g.Name(id), g.names[o])
 }

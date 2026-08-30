@@ -239,6 +239,31 @@ func TestSkirmishAndArmorAndPoison(t *testing.T) {
 	}
 }
 
+func TestFightDamageRedirect(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.SetChooser(0, orderLastChooser{}) // the Before Fight choice picks the last candidate
+	gabos := g.AddToBattleline(testCreature("gabos", 5, WithAbility(TriggerBeforeFight, RedirectFightDamage{Target: Target{Kind: TargetChosenCreature}})), 0)
+	def := g.AddToBattleline(testCreature("defender", 3), 1)
+	bystander := g.AddToBattleline(testCreature("bystander", 2), 1)
+
+	g.fight(gabos, def)
+
+	// Candidates are [gabos, defender, bystander]; the chooser takes the last, so
+	// Gabos's fight damage lands on the bystander, not the defender it fights.
+	if g.inPlay(bystander) {
+		t.Error("bystander should take Gabos's 5 fight damage and be destroyed")
+	}
+	if g.Damage(def) != 0 {
+		t.Errorf("defender should take no fight damage; got %d", g.Damage(def))
+	}
+	if g.Damage(gabos) != 3 {
+		t.Errorf("Gabos should still take the defender's 3 damage back; got %d", g.Damage(gabos))
+	}
+	if g.State.FightDamageRedirect != 0 {
+		t.Error("redirect should be cleared after the fight")
+	}
+}
+
 func TestAssaultAndHazardous(t *testing.T) {
 	// Assault: the attacker deals its Assault to the defender before fight damage.
 	g := NewGame("A", "B", 1)

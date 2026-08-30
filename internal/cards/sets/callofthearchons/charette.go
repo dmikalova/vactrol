@@ -10,7 +10,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Power:  4
 //	Traits: Demon
 //
-//	Play: Charette captures 3 Æmber.
+//	Play: Charette captures 3 Æmber from your opponent.
 var Charette = card.New(
 	"Charette",
 	card.House.Dis,
@@ -20,5 +20,9 @@ var Charette = card.New(
 	card.WithPower(4),
 	card.WithTraits("Demon"),
 	card.WithAbility(
-		card.Trigger.Play, card.CaptureAember{Amount: 3}),
+		card.Trigger.Play, card.CaptureAember{
+			Amount: 3,
+			Target: card.Target.This,
+			Source: card.Opponent,
+		}),
 )

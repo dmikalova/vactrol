@@ -11,7 +11,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Armor:  1
 //	Traits: Knight • Spirit
 //
-//	After a creature is destroyed fighting Francus, Francus captures 1 Æmber.
+//	After a creature is destroyed fighting Francus, Francus captures 1 Æmber from your opponent.
 var Francus = card.New(
 	"Francus",
 	card.House.Sanctum,
@@ -21,5 +21,10 @@ var Francus = card.New(
 	card.WithPower(6),
 	card.WithArmor(1),
 	card.WithTraits("Knight", "Spirit"),
-	card.WithAbility(card.Trigger.AfterDestroyedFighting, card.CaptureAember{Amount: 1}),
+	card.WithAbility(
+		card.Trigger.AfterDestroyedFighting, card.CaptureAember{
+			Amount: 1,
+			Target: card.Target.This,
+			Source: card.Opponent,
+		}),
 )

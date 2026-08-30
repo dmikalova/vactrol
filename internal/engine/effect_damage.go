@@ -16,6 +16,14 @@ type DealDamage struct {
 	Target Target
 }
 
+// validate requires an explicit target.
+func (e DealDamage) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("DealDamage")
+	}
+	return nil
+}
+
 // Text renders the effect, e.g. "deal 2 damage to each enemy creature". A "for
 // each" count leads the sentence (rule 9), e.g. "for each friendly creature in
 // play, deal 1 damage to a creature".

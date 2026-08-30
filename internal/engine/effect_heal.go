@@ -45,6 +45,9 @@ func (e Heal) Resolve(ctx *EffectContext) {
 // validate rejects a Heal that sets both a fixed Amount and Fully, since the two
 // are different ways to say how much to heal and combining them is ambiguous.
 func (e Heal) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("Heal")
+	}
 	if e.Fully && e.Amount != 0 {
 		return fmt.Errorf("heal: set Amount or Fully, not both (got Amount=%d, Fully=true)", e.Amount)
 	}

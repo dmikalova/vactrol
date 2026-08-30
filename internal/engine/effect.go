@@ -43,6 +43,12 @@ func errUnsetPlayer(effect string) error {
 	return fmt.Errorf("%s: player must be set (Controller, Opponent, or EachPlayer)", effect)
 }
 
+// errUnsetTarget is the configuration error a target-taking effect returns when
+// its Target was left as the invalid zero value.
+func errUnsetTarget(effect string) error {
+	return fmt.Errorf("%s: target must be set", effect)
+}
+
 // errUnsetDuration is the configuration error a timed effect returns when its
 // Duration was left as the invalid zero value.
 func errUnsetDuration(effect string) error {

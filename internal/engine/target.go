@@ -17,8 +17,12 @@ import (
 type TargetKind int
 
 const (
+	// targetUnset is the invalid zero value — a Target whose base set was never
+	// chosen. An effect that requires a target rejects it in validation, so a card
+	// must always name its target explicitly rather than leaning on a default.
+	targetUnset TargetKind = iota
 	// TargetThisCreature selects the source card itself.
-	TargetThisCreature TargetKind = iota
+	TargetThisCreature
 	// TargetTriggeringCreature selects the creature that caused the trigger ("it").
 	TargetTriggeringCreature
 	// TargetEachCreature selects every creature in play.
@@ -170,6 +174,12 @@ func (t Target) Neighboring() Target {
 func (t Target) Selector(s Selector) Target {
 	t.selector = s
 	return t
+}
+
+// valid reports whether the target's base set was chosen (its Kind is not the
+// unset zero value). Effects that require a target check this in validation.
+func (t Target) valid() bool {
+	return t.Kind != targetUnset
 }
 
 // Text renders the target as an English noun phrase, e.g. "each enemy creature",

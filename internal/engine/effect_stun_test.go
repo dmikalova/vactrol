@@ -45,3 +45,19 @@ func TestExhaust(t *testing.T) {
 		t.Error("Exhaust should exhaust the creature")
 	}
 }
+
+func TestReady(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	src := g.AddToBattleline(testCreature("src", 3), 0)
+	g.State.Cards[src].Exhausted = true
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	e := Ready{Target: Target{Kind: TargetThisCreature}}
+	if e.Text() != "ready "+SelfName {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if g.State.Cards[src].Exhausted {
+		t.Error("Ready should ready the creature")
+	}
+}

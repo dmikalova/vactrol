@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Shadows</title>
+  <path d="M3 8c3-2 15-2 18 0 0 5-4 6.5-6.5 6.5-1.2 0-2.3-1-3.5-1s-2.3 1-3.5 1C5 14.5 3 13 3 8Z" fill="#aeb4bb"/>
+  <circle cx="8" cy="10" r="1.4" fill="#1c1c1b"/>
+  <circle cx="16" cy="10" r="1.4" fill="#1c1c1b"/>
+</svg>

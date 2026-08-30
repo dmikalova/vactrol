@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Creature</title>
+  <g fill="#b8b5ad">
+    <circle cx="12" cy="8" r="4.2"/>
+    <path d="M4 21c0-4.4 3.6-7.5 8-7.5s8 3.1 8 7.5Z"/>
+  </g>
+</svg>

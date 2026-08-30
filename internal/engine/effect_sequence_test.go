@@ -37,3 +37,25 @@ func TestSequenceCombinesSameTarget(t *testing.T) {
 		t.Errorf("mixed text = %q, want %q", got, want)
 	}
 }
+
+func TestSequenceCombinesSameVerb(t *testing.T) {
+	// Consecutive combinable effects sharing a verb fold their targets.
+	both := Sequence{Effects: []Effect{
+		Destroy{Target: Target{Kind: TargetChosenEnemyCreature}},
+		Destroy{Target: Target{Kind: TargetChosenFriendlyCreature}},
+	}}
+	if got := both.Text(); got != "destroy an enemy creature and a friendly creature" {
+		t.Errorf("combined text = %q", got)
+	}
+
+	// A run of three shared-verb effects folds every target.
+	three := Sequence{Effects: []Effect{
+		Destroy{Target: Target{Kind: TargetChosenEnemyCreature}},
+		Destroy{Target: Target{Kind: TargetChosenFriendlyCreature}},
+		Destroy{Target: Target{Kind: TargetEachCreature}},
+	}}
+	want := "destroy an enemy creature and a friendly creature and each creature"
+	if got := three.Text(); got != want {
+		t.Errorf("three text = %q, want %q", got, want)
+	}
+}

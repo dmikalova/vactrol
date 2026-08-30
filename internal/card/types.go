@@ -49,10 +49,11 @@ var Rarity = rarities{
 	Uncommon: engine.Uncommon,
 	Rare:     engine.Rare,
 	Special:  engine.Special,
+	Fixed:    engine.Fixed,
 }
 
 type rarities struct {
-	Common, Uncommon, Rare, Special engine.Rarity
+	Common, Uncommon, Rare, Special, Fixed engine.Rarity
 }
 
 // Keyword groups the keyword values, e.g. card.Keyword.Skirmish.

@@ -16,7 +16,7 @@ import (
 //	Power:  3
 //	Traits: Human • Scientist
 //
-//	Play: Dextre captures 1 Æmber.
+//	Play: Dextre captures 1 Æmber from your opponent.
 //	Destroyed: Put Dextre on top of its owner's deck.
 func TestDextre(t *testing.T) {
 	t.Run("captures 1 Æmber when played", func(t *testing.T) {

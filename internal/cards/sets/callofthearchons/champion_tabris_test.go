@@ -16,7 +16,7 @@ import (
 //	Armor:  2
 //	Traits: Human • Knight
 //
-//	Fight: Champion Tabris captures 1 Æmber.
+//	Fight: Champion Tabris captures 1 Æmber from your opponent.
 func TestChampionTabris(t *testing.T) {
 	t.Run("captures 1 Æmber when it fights", func(t *testing.T) {
 		var enemy ct.Card

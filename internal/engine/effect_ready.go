@@ -18,6 +18,14 @@ type ReadyCreatures struct {
 	Target Target
 }
 
+// validate requires an explicit target.
+func (e ReadyCreatures) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("ReadyCreatures")
+	}
+	return nil
+}
+
 // Text renders the effect, e.g. "for each card revealed this way, ready a Mars
 // creature".
 func (e ReadyCreatures) Text() string {

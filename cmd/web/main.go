@@ -19,14 +19,19 @@ func main() {
 	http.Handle("/", &app.Handler{
 		Name:            "Vactrol",
 		ShortName:       "Vactrol",
+		Title:           "Vactrol",
 		Description:     "Vactrol — a KeyForge-style card game, playable in the browser.",
 		BackgroundColor: "#1c1c1b",
 		ThemeColor:      "#1c1c1b",
+		Icon: app.Icon{
+			SVG:     "/web/assets/favicon.svg",
+			Default: "/web/assets/favicon.svg",
+		},
 		// Plain CSS served as a static file from web/ — no CDN, no build step. The dev
 		// server serves it from disk, so editing web/app.css and refreshing the browser
 		// applies changes with the server left running (no restart).
 		Styles:     []string{"/web/app.css"},
-		RawHeaders: []string{boardScript, devReloadScript},
+		RawHeaders: []string{bootStyle, boardScript, devReloadScript},
 	})
 
 	const addr = ":8000"
@@ -36,7 +41,15 @@ func main() {
 	}
 }
 
-// boardScript turns a vertical scroll wheel into horizontal scrolling over the
+// bootStyle is an inline <head> stylesheet that paints the dark background
+// immediately, before the external app.css link finishes loading. Without it a
+// refresh flashes the browser's default white page (and the go-app loader over
+// it) until the stylesheet applies.
+const bootStyle = `<style>
+  html, body { margin: 0; background-color: #1c1c1b; color: #f7f1ff; }
+  #app-wasm-loader, .goapp-app-info { background-color: #1c1c1b; color: #8b888f; }
+</style>`
+
 // card strips (convenient when a battleline runs off-screen) and keeps the game
 // log pinned to its newest entry.
 const boardScript = `<script>

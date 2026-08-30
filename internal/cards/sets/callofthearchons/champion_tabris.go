@@ -11,7 +11,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Armor:  2
 //	Traits: Human • Knight
 //
-//	Fight: Champion Tabris captures 1 Æmber.
+//	Fight: Champion Tabris captures 1 Æmber from your opponent.
 var ChampionTabris = card.New(
 	"Champion Tabris",
 	card.House.Sanctum,
@@ -22,5 +22,9 @@ var ChampionTabris = card.New(
 	card.WithArmor(2),
 	card.WithTraits("Human", "Knight"),
 	card.WithAbility(
-		card.Trigger.Fight, card.CaptureAember{Amount: 1}),
+		card.Trigger.Fight, card.CaptureAember{
+			Amount: 1,
+			Target: card.Target.This,
+			Source: card.Opponent,
+		}),
 )

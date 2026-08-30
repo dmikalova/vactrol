@@ -20,5 +20,8 @@ var BadPenny = card.New(
 	card.WithPower(1),
 	card.WithTraits("Human", "Thief"),
 	card.WithAbility(
-		card.Trigger.Destroyed, card.MoveFromPlay{Target: card.Target.This, Destination: card.To.Hand}),
+		card.Trigger.Destroyed, card.MoveFromPlay{
+			Target:      card.Target.This,
+			Destination: card.To.Hand,
+		}),
 )

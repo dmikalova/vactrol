@@ -96,3 +96,43 @@ func (e Instead) Text() string {
 func (e Instead) Resolve(ctx *EffectContext) {
 	ctx.Resolver.AddLasting(e.Of, e.With.action(), ctx.Controller, 0)
 }
+
+// NextCreaturePlayed makes the next creature of house Of its controller plays this
+// turn enter play with EntersPlay applied to it — Blypyp readying the next Mars
+// creature. It registers a one-shot reaction that applies the effect to that
+// creature and then removes itself; the turn's end clears it if no such creature is
+// played. EntersPlay must be an enter-play effect the flat registry can carry
+// (Ready).
+type NextCreaturePlayed struct {
+	Of         House
+	EntersPlay Effect
+}
+
+// validate rejects an EntersPlay effect the registry cannot carry.
+func (e NextCreaturePlayed) validate() error {
+	if _, ok := enterActionOf(e.EntersPlay); !ok {
+		return fmt.Errorf("NextCreaturePlayed: unsupported EntersPlay %T", e.EntersPlay)
+	}
+	return validateEffect(e.EntersPlay)
+}
+
+// Text renders the effect, e.g. "the next Mars creature you play this turn enters
+// play ready".
+func (e NextCreaturePlayed) Text() string {
+	return fmt.Sprintf("the next %s creature you play this turn enters play %s", e.Of, enterStateWord(e.EntersPlay))
+}
+
+// Resolve registers the one-shot enter-play reaction on the controller.
+func (e NextCreaturePlayed) Resolve(ctx *EffectContext) {
+	action, _ := enterActionOf(e.EntersPlay)
+	ctx.Resolver.AddLastingOnce(EventCreaturePlayed, action, ctx.Controller, 0, e.Of)
+}
+
+// enterActionOf maps an enter-play effect to the flat lasting action that applies
+// it to the next played creature, reporting whether the registry can carry it.
+func enterActionOf(e Effect) (lastingAction, bool) {
+	if _, ok := e.(Ready); ok {
+		return actReadyPlayed, true
+	}
+	return 0, false
+}

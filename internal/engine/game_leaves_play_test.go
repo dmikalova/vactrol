@@ -14,6 +14,23 @@ func (e recordEnemyCount) Resolve(ctx *EffectContext) {
 	*e.got = len(ctx.Resolver.Battleline(ctx.Opponent()))
 }
 
+// TestDestroyOrderByCreature destroys two creatures that each carry one Destroyed
+// ability: the controller resolves them one creature at a time (a lone remaining
+// creature is forced), and both abilities fire.
+func TestDestroyOrderByCreature(t *testing.T) {
+	g := started(t)
+	gain := GainAember{Player: Controller, Amount: 1}
+	a := g.AddToBattleline(testCreature("a", 3, WithAbility(TriggerDestroyed, gain)), 0)
+	b := g.AddToBattleline(testCreature("b", 3, WithAbility(TriggerDestroyed, gain)), 0)
+	before := g.Aember(0)
+
+	g.DestroyEach(0, []LocalID{a, b})
+
+	if g.Aember(0) != before+2 {
+		t.Errorf("aember = %d, want %d (both Destroyed abilities resolve)", g.Aember(0), before+2)
+	}
+}
+
 func TestDestroyTogetherResolvesBeforeDiscard(t *testing.T) {
 	g := started(t)
 	// A's "Destroyed:" ability records how many enemy creatures are in play when

@@ -2,6 +2,64 @@ package engine
 
 import "testing"
 
+func TestReturnNamedToHand(t *testing.T) {
+	e := ReturnNamedToHand{Name: "Urchin"}
+	if e.Text() != "put an Urchin from play or from your discard pile into your hand" {
+		t.Errorf("text = %q", e.Text())
+	}
+
+	urchin := func(g *Game, player int) LocalID {
+		return g.Register(NewCard("Urchin", Shadows, Creature, Common, WithPower(1), WithTraits("Elf", "Thief")), player)
+	}
+
+	t.Run("from play", func(t *testing.T) {
+		g := NewGame("A", "B", 1)
+		src := g.AddToBattleline(testCreature("faygin", 3), 0)
+		urch := g.AddToBattleline(NewCard("Urchin", Shadows, Creature, Common, WithPower(1), WithTraits("Elf", "Thief")), 0)
+		g.AddToBattleline(testCreature("other", 4), 0)                              // different name: filtered out
+		g.State.Discard[0].add(g.Register(NewCard("junk", Dis, Action, Common), 0)) // different name in discard: filtered out
+		ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+		e.Resolve(ctx) // the sole Urchin candidate is auto-chosen
+		if g.inPlay(urch) {
+			t.Error("the Urchin should leave play")
+		}
+		if !g.State.Hand[0].contains(urch) {
+			t.Error("the Urchin should be in the controller's hand")
+		}
+	})
+
+	t.Run("from discard", func(t *testing.T) {
+		g := NewGame("A", "B", 1)
+		src := g.AddToBattleline(testCreature("faygin", 3), 0)
+		urch := urchin(g, 0)
+		g.State.Discard[0].add(urch)
+		ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+		e.Resolve(ctx)
+		if g.State.Discard[0].contains(urch) {
+			t.Error("the Urchin should leave the discard pile")
+		}
+		if !g.State.Hand[0].contains(urch) {
+			t.Error("the Urchin should be in the controller's hand")
+		}
+	})
+
+	t.Run("declined", func(t *testing.T) {
+		g := NewGame("A", "B", 1)
+		src := g.AddToBattleline(testCreature("faygin", 3), 0)
+		u1 := g.AddToBattleline(NewCard("Urchin", Shadows, Creature, Common, WithPower(1), WithTraits("Elf", "Thief")), 0)
+		g.AddToBattleline(NewCard("Urchin", Shadows, Creature, Common, WithPower(1), WithTraits("Elf", "Thief")), 0)
+		g.SetChooser(0, orderRejectChooser{})
+		ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+		e.Resolve(ctx)
+		if !g.inPlay(u1) {
+			t.Error("nothing should move when the choice is declined")
+		}
+	})
+}
+
 func TestMoveFromPlayToDeck(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	src := g.AddToBattleline(testCreature("src", 1), 0)
@@ -81,17 +139,39 @@ func TestMoveFromPlayToArchives(t *testing.T) {
 	}
 }
 
+func TestMoveFromPlayToDeckShuffled(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	src := g.AddToBattleline(testCreature("chrono", 2), 0)
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	e := MoveFromPlay{Target: Target{Kind: TargetThisCreature}, Destination: ToDeckShuffled}
+	if e.Text() != "shuffle {self} into its owner's deck" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+	if g.inPlay(src) {
+		t.Error("the creature should leave play")
+	}
+	if g.State.Deck[0].Count != 1 || !g.State.Deck[0].contains(src) {
+		t.Errorf("the creature should be shuffled into its owner's deck")
+	}
+}
+
 func TestMoveFromPlayValidate(t *testing.T) {
-	for _, d := range []Destination{ToHand, ToTopOfDeck, ToArchives} {
-		if err := (MoveFromPlay{Destination: d}).validate(); err != nil {
+	this := Target{Kind: TargetThisCreature}
+	for _, d := range []Destination{ToHand, ToTopOfDeck, ToDeckShuffled, ToArchives} {
+		if err := (MoveFromPlay{Target: this, Destination: d}).validate(); err != nil {
 			t.Errorf("destination %d should be valid, got %v", d, err)
 		}
 	}
-	if err := (MoveFromPlay{}).validate(); err == nil {
+	if err := (MoveFromPlay{Target: this}).validate(); err == nil {
 		t.Error("an unset destination should be rejected")
 	}
-	if err := (MoveFromPlay{Destination: ToBottomOfDeck}).validate(); err == nil {
+	if err := (MoveFromPlay{Target: this, Destination: ToBottomOfDeck}).validate(); err == nil {
 		t.Error("an unsupported destination should be rejected")
+	}
+	if err := (MoveFromPlay{Destination: ToHand}).validate(); err == nil {
+		t.Error("an unset target should be rejected")
 	}
 }
 

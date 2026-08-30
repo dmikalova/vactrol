@@ -33,6 +33,8 @@ type Resolver interface {
 	Hand(player int) []LocalID
 	// Discard returns a copy of a player's discard pile.
 	Discard(player int) []LocalID
+	// Deck returns a copy of a player's deck, top card first.
+	Deck(player int) []LocalID
 	// Archives returns a copy of a player's archived cards.
 	Archives(player int) []LocalID
 	// Purge returns a copy of a player's purged cards.
@@ -60,6 +62,9 @@ type Resolver interface {
 	SetStunned(id LocalID, stunned bool)
 	// SetExhausted sets a creature's exhausted status.
 	SetExhausted(id LocalID, exhausted bool)
+	// SetFightDamageRedirect redirects the attacker's fight damage in the fight in
+	// progress to another creature (Gabos Longarms), read and cleared by combat.
+	SetFightDamageRedirect(id LocalID)
 	// AddAmberOn changes the Æmber sitting on a card.
 	AddAmberOn(id LocalID, delta int)
 	// AddPowerCounter changes the net power counters on a creature, adjusting its
@@ -81,6 +86,8 @@ type Resolver interface {
 	MoveToHand(id LocalID)
 	// MoveToArchives moves a card from play to its owner's archives.
 	MoveToArchives(id LocalID)
+	// MoveToDeckShuffled moves a card from play into its owner's deck and shuffles.
+	MoveToDeckShuffled(id LocalID)
 	// ArchiveFromHand moves a card from its owner's hand to their archives.
 	ArchiveFromHand(id LocalID)
 	// ArchiveTopOfDeck moves the top card of a player's deck to their archives,
@@ -101,6 +108,11 @@ type Resolver interface {
 	PurgeFromPlay(id LocalID)
 	// MoveFromDiscardToHand moves a card from its owner's discard to their hand.
 	MoveFromDiscardToHand(id LocalID)
+	// MoveFromDeckToHand moves a card from its owner's deck to their hand.
+	MoveFromDeckToHand(id LocalID)
+	// ShuffleDiscardIntoDeck moves a player's whole discard pile into their deck
+	// and shuffles it.
+	ShuffleDiscardIntoDeck(player int)
 	// MoveFromDiscardToTopOfDeck moves a card from its owner's discard to the top
 	// of their deck.
 	MoveFromDiscardToTopOfDeck(id LocalID)
@@ -119,6 +131,9 @@ type Resolver interface {
 	// Charge!, Crystal Hive reactions; Dimension Door's replacement) on a game event,
 	// instead of the effect hardcoding itself into the play or reap path.
 	AddLasting(on Event, do lastingAction, controller, amount int)
+	// AddLastingOnce registers a one-shot reaction that fires (and self-removes) the
+	// next time its event occurs for a subject of the given house (Blypyp).
+	AddLastingOnce(on Event, do lastingAction, controller, amount int, house House)
 	// ForceActiveHouseNextTurn makes a player have to choose the given house as their
 	// active house on their next turn.
 	ForceActiveHouseNextTurn(player int, house House)
@@ -198,6 +213,10 @@ func (g *Game) SetStunned(id LocalID, stunned bool) { g.State.Cards[id].Stunned 
 // SetExhausted sets a creature's exhausted status.
 func (g *Game) SetExhausted(id LocalID, exhausted bool) { g.State.Cards[id].Exhausted = exhausted }
 
+// SetFightDamageRedirect redirects the attacker's fight damage in the current
+// fight to another creature; the combat step reads and clears it.
+func (g *Game) SetFightDamageRedirect(id LocalID) { g.State.FightDamageRedirect = id }
+
 // AddAmberOn changes the Æmber sitting on a card.
 func (g *Game) AddAmberOn(id LocalID, delta int) { g.State.Cards[id].Amber += int16(delta) }
 
@@ -220,6 +239,9 @@ func (g *Game) MoveToHand(id LocalID) { g.moveToHand(id) }
 
 // MoveToArchives is the Resolver entry point for moveToArchives.
 func (g *Game) MoveToArchives(id LocalID) { g.moveToArchives(id) }
+
+// MoveToDeckShuffled is the Resolver entry point for moveToDeckShuffled.
+func (g *Game) MoveToDeckShuffled(id LocalID) { g.moveToDeckShuffled(id) }
 
 // ArchiveFromHand moves a card from its owner's hand to their archives.
 func (g *Game) ArchiveFromHand(id LocalID) { g.archiveFromHand(g.owner(id), id) }
@@ -251,6 +273,18 @@ func (g *Game) MoveFromDiscardToHand(id LocalID) {
 	g.State.Hand[o].add(id)
 	g.logf("%s returns %s from their discard to hand", g.names[o], g.Name(id))
 }
+
+// MoveFromDeckToHand moves a card from its owner's deck to their hand.
+func (g *Game) MoveFromDeckToHand(id LocalID) {
+	o := g.owner(id)
+	g.State.Deck[o].remove(id)
+	g.State.Hand[o].add(id)
+	g.logf("%s puts %s from their deck into hand", g.names[o], g.Name(id))
+}
+
+// ShuffleDiscardIntoDeck moves a player's whole discard pile into their deck and
+// shuffles it.
+func (g *Game) ShuffleDiscardIntoDeck(player int) { g.shuffleDiscardIntoDeck(player) }
 
 // MoveFromDiscardToTopOfDeck moves a card from its owner's discard pile to the
 // top of their deck.

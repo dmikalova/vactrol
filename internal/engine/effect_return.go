@@ -1,6 +1,9 @@
 package engine
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // MoveFromPlay takes each card its Target selects out of play and puts it in a
 // destination zone — the top of its owner's deck, their hand, or their archives —
@@ -23,6 +26,8 @@ func (e MoveFromPlay) Text() string {
 	switch e.Destination {
 	case ToTopOfDeck:
 		return fmt.Sprintf("put %s on top of its owner's deck", e.Target.Text())
+	case ToDeckShuffled:
+		return fmt.Sprintf("shuffle %s into its owner's deck", e.Target.Text())
 	case ToArchives:
 		return fmt.Sprintf("put %s into its owner's archives", e.Target.Text())
 	default:
@@ -34,8 +39,11 @@ func (e MoveFromPlay) Text() string {
 // the top of the deck, and the archives are supported, and the destination must be
 // named.
 func (e MoveFromPlay) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("MoveFromPlay")
+	}
 	switch e.Destination {
-	case ToHand, ToTopOfDeck, ToArchives:
+	case ToHand, ToTopOfDeck, ToDeckShuffled, ToArchives:
 		return nil
 	default:
 		return fmt.Errorf("MoveFromPlay: unsupported destination %d", e.Destination)
@@ -53,6 +61,10 @@ func (e MoveFromPlay) Resolve(ctx *EffectContext) {
 	case ToArchives:
 		for _, id := range e.Target.Select(ctx) {
 			ctx.Resolver.MoveToArchives(id)
+		}
+	case ToDeckShuffled:
+		for _, id := range e.Target.Select(ctx) {
+			ctx.Resolver.MoveToDeckShuffled(id)
 		}
 	default:
 		for _, id := range e.Target.Select(ctx) {
@@ -91,4 +103,49 @@ func (e MoveArtifactsToHand) Resolve(ctx *EffectContext) {
 		}
 		ctx.Resolver.MoveToHand(cands[choice])
 	}
+}
+
+// ReturnNamedToHand puts a card with a specific name that the controller chooses
+// into their hand, taken either from a friendly creature in play or from their
+// discard pile — Faygin recovering an Urchin. The controller chooses among both
+// zones at once; an in-play creature returns to hand (shedding its in-play state)
+// and a discard card is recovered.
+//
+//rulebook:effect Return Named Card to Hand
+type ReturnNamedToHand struct {
+	Name string
+}
+
+// Text renders the effect, e.g. "put an Urchin from play or from your discard pile
+// into your hand".
+func (e ReturnNamedToHand) Text() string {
+	return fmt.Sprintf("put %s from play or from your discard pile into your hand", indefinite(e.Name))
+}
+
+// Resolve gathers every friendly in-play creature and discard-pile card with the
+// name, lets the controller choose one, and moves it to their hand from whichever
+// zone it is in.
+func (e ReturnNamedToHand) Resolve(ctx *EffectContext) {
+	inPlay := nameMatches(ctx, ctx.Resolver.Battleline(ctx.Controller), e.Name)
+	candidates := append(inPlay, nameMatches(ctx, ctx.Resolver.Discard(ctx.Controller), e.Name)...)
+	id, ok := ctx.ChooseCreature("Choose "+indefinite(e.Name)+" to put into your hand", candidates)
+	if !ok {
+		return
+	}
+	if slices.Contains(inPlay, id) {
+		ctx.Resolver.MoveToHand(id)
+	} else {
+		ctx.Resolver.MoveFromDiscardToHand(id)
+	}
+}
+
+// nameMatches returns the ids whose card has the given name, in order.
+func nameMatches(ctx *EffectContext, ids []LocalID, name string) []LocalID {
+	var out []LocalID
+	for _, id := range ids {
+		if ctx.Resolver.Name(id) == name {
+			out = append(out, id)
+		}
+	}
+	return out
 }

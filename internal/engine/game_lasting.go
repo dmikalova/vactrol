@@ -58,15 +58,20 @@ const (
 	actGainAember lastingAction = iota
 	actDealDamage
 	actSteal
+	actReadyPlayed
 )
 
 // describe is a short label for a reaction, used when the controller orders several
 // that fire at once.
 func (a lastingAction) describe() string {
-	if a == actDealDamage {
+	switch a {
+	case actDealDamage:
 		return "deal damage"
+	case actReadyPlayed:
+		return "ready the creature"
+	default:
+		return "gain Æmber"
 	}
-	return "gain Æmber"
 }
 
 // LastingEffect is one registered lasting effect: the event it attaches to, what it
@@ -77,6 +82,12 @@ type LastingEffect struct {
 	Do         lastingAction
 	Controller int8
 	Amount     int8
+	// House, when set, limits a reaction to a subject of that house (Blypyp readies
+	// only Mars creatures). HouseNone (the zero value) reacts to any subject.
+	House House
+	// Once removes the record after it fires a single time — "the next" rather than
+	// "each time".
+	Once bool
 }
 
 // maxLasting bounds how many lasting effects can be active at once — generous for
@@ -88,15 +99,23 @@ const maxLasting = 8
 // turn. It is the single seam a "for the remainder of the turn" effect uses instead
 // of hardcoding itself into the play or reap path.
 func (g *Game) AddLasting(on Event, do lastingAction, controller, amount int) {
+	g.addLasting(LastingEffect{On: on, Do: do, Controller: int8(controller), Amount: int8(amount)})
+}
+
+// AddLastingOnce registers a one-shot reaction that fires the next time its event
+// occurs — and, when house is set, only for a subject of that house — then removes
+// itself (Blypyp readying the next Mars creature you play).
+func (g *Game) AddLastingOnce(on Event, do lastingAction, controller, amount int, house House) {
+	g.addLasting(LastingEffect{On: on, Do: do, Controller: int8(controller), Amount: int8(amount), House: house, Once: true})
+}
+
+// addLasting appends a lasting record, dropping it silently when the registry is
+// full.
+func (g *Game) addLasting(le LastingEffect) {
 	if int(g.State.LastingCount) >= maxLasting {
 		return
 	}
-	g.State.Lasting[g.State.LastingCount] = LastingEffect{
-		On:         on,
-		Do:         do,
-		Controller: int8(controller),
-		Amount:     int8(amount),
-	}
+	g.State.Lasting[g.State.LastingCount] = le
 	g.State.LastingCount++
 }
 
@@ -123,9 +142,14 @@ func (g *Game) clearLasting(player int) {
 func (g *Game) fireLasting(event Event, actor int, subject LocalID) {
 	var pending []LastingEffect
 	for i := 0; i < int(g.State.LastingCount); i++ {
-		if le := g.State.Lasting[i]; int(le.Controller) == actor && le.On == event {
-			pending = append(pending, le)
+		le := g.State.Lasting[i]
+		if int(le.Controller) != actor || le.On != event {
+			continue
 		}
+		if le.House != HouseNone && g.cat.def(subject).House != le.House {
+			continue
+		}
+		pending = append(pending, le)
 	}
 	for len(pending) > 0 {
 		idx := 0
@@ -136,8 +160,28 @@ func (g *Game) fireLasting(event Event, actor int, subject LocalID) {
 			}
 			idx = g.chooseOption(actor, "", "Choose the next effect to resolve", labels)
 		}
-		g.resolveReaction(pending[idx], actor, subject)
+		le := pending[idx]
+		g.resolveReaction(le, actor, subject)
+		if le.Once {
+			g.removeLasting(le)
+		}
 		pending = append(pending[:idx], pending[idx+1:]...)
+	}
+}
+
+// removeLasting drops the first registry entry equal to target — a one-shot
+// reaction removing itself after it fires.
+func (g *Game) removeLasting(target LastingEffect) {
+	for i := 0; i < int(g.State.LastingCount); i++ {
+		if g.State.Lasting[i] != target {
+			continue
+		}
+		for j := i; j < int(g.State.LastingCount)-1; j++ {
+			g.State.Lasting[j] = g.State.Lasting[j+1]
+		}
+		g.State.LastingCount--
+		g.State.Lasting[g.State.LastingCount] = LastingEffect{}
+		return
 	}
 }
 
@@ -151,6 +195,9 @@ func (g *Game) resolveReaction(le LastingEffect, actor int, subject LocalID) {
 			Source:     subject,
 			Controller: actor,
 		})
+	case actReadyPlayed:
+		g.State.Cards[subject].Exhausted = false
+		g.logf("%s is readied", g.Name(subject))
 	default: // actGainAember
 		g.State.Aember[actor] += int(le.Amount)
 		g.logf("%s gains %d Æmber (%s)", g.names[actor], le.Amount, le.On.clause())

@@ -27,6 +27,8 @@ func enterStateWord(e Effect) string {
 	switch e.(type) {
 	case Stun:
 		return "stunned"
+	case Ready:
+		return "ready"
 	default:
 		return e.Text()
 	}
@@ -293,6 +295,9 @@ func restrictionText(r Restrictions) []string {
 		}
 		lines = append(lines, fmt.Sprintf("%s cannot play more than %d cards each turn.", who, l.Amount))
 	}
+	if t := r.Toll; t.Amount > 0 {
+		lines = append(lines, fmt.Sprintf("Your opponent must pay you %d Æmber in order to %s.", t.Amount, t.Action.phrase()))
+	}
 	return lines
 }
 
@@ -360,4 +365,18 @@ func capitalizeFirst(s string) string {
 	r := []rune(s)
 	r[0] = unicode.ToUpper(r[0])
 	return string(r)
+}
+
+// indefinite prefixes a noun with the indefinite article "a" or "an", choosing
+// "an" before a word that starts with a vowel — e.g. "an Urchin", "a Knight".
+func indefinite(noun string) string {
+	if noun == "" {
+		return noun
+	}
+	switch unicode.ToLower([]rune(noun)[0]) {
+	case 'a', 'e', 'i', 'o', 'u':
+		return "an " + noun
+	default:
+		return "a " + noun
+	}
 }

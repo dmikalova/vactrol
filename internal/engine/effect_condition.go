@@ -107,3 +107,34 @@ func (e RepeatWhile) Resolve(ctx *EffectContext) {
 func (e RepeatWhile) validate() error {
 	return validateEffect(e.Do)
 }
+
+// MayRepeat resolves Do once, then offers the controller the choice to resolve it
+// again for as long as Cond holds and they keep accepting — the optional
+// counterpart to RepeatWhile, modelling "<do>. If <cond>, you may repeat this
+// effect." Do should make progress toward failing Cond so the loop can end.
+type MayRepeat struct {
+	Cond Condition
+	Do   Effect
+}
+
+// Text renders the effect, closing with the optional self-repeat gate.
+func (e MayRepeat) Text() string {
+	return e.Do.Text() + " -> " + e.Cond.CondText() + ", you may repeat this effect"
+}
+
+// Resolve runs Do once, then repeats it while Cond holds and the controller keeps
+// choosing to repeat.
+func (e MayRepeat) Resolve(ctx *EffectContext) {
+	e.Do.Resolve(ctx)
+	for e.Cond.Met(ctx) {
+		if ctx.ChooseOption("Repeat this effect?", []string{"Yes", "No"}) != 0 {
+			return
+		}
+		e.Do.Resolve(ctx)
+	}
+}
+
+// validate checks the repeated effect for configuration errors.
+func (e MayRepeat) validate() error {
+	return validateEffect(e.Do)
+}

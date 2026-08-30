@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Artifact</title>
+  <path d="M9 3h6l2.5 4.5H6.5Z" fill="#b8b5ad"/>
+  <circle cx="12" cy="14.5" r="6" fill="#b8b5ad"/>
+  <circle cx="12" cy="14.5" r="2.4" fill="#1d1d1c"/>
+</svg>

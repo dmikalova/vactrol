@@ -18,7 +18,10 @@ var CooperativeHunting = card.New(
 	card.WithAbility(
 		card.Trigger.Play, card.DealDamage{
 			Amount: 1,
-			Per:    card.FriendlyCreaturesInPlay{},
+			Per: card.InPlay{
+				Player: card.Controller,
+				Type:   card.Type.Creature,
+			},
 			Target: card.Target.Creature,
 		}),
 )

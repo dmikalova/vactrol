@@ -64,10 +64,11 @@ body {
   padding: 0.75rem;
 }
 /* The play rows between the two score pills; also the drop zone for hand cards.
-   flex-grow 5 keeps each of its rows the same height as the hand row below. */
+   flex-grow matches its four card rows so each is the same height as the single
+   hand row (flex-grow 1) below. */
 .play-zone {
   display: flex;
-  flex: 5 1 0%;
+  flex: 4 1 0%;
   min-height: 0;
   flex-direction: column;
   gap: 0.25rem;
@@ -168,6 +169,15 @@ body {
   font-weight: 600;
   color: #fce566;
 }
+.detail-status {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fce566;
+}
 
 .controls {
   display: flex;
@@ -206,6 +216,7 @@ body {
 }
 .btn-primary,
 .btn-secondary,
+.btn-warning,
 .btn-danger {
   width: 100%;
   border: 0;
@@ -230,6 +241,13 @@ body {
 .btn-secondary:hover {
   background-color: #525053;
 }
+.btn-warning {
+  background-color: #f0a029;
+  color: #1c1c1b;
+}
+.btn-warning:hover {
+  background-color: #f7b750;
+}
 .btn-danger {
   background-color: #fc618d;
   color: #1c1c1b;
@@ -251,6 +269,92 @@ body {
 .btn-nav:hover {
   background-color: #525053;
 }
+/* the Manual toggle when sandbox mode is on */
+.btn-nav-on {
+  background-color: #fce566;
+  color: #1c1c1b;
+}
+.btn-nav-on:hover {
+  background-color: #fdee8f;
+}
+/* ---- manual (sandbox) controls ---- */
+.manual-panel {
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px dashed #363537;
+}
+.btn-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.btn-mini {
+  flex: 1 1 auto;
+  border: 1px solid #363537;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  background-color: #262625;
+  color: #f7f1ff;
+}
+.btn-mini:hover {
+  background-color: #363537;
+}
+/* ---- card picker (fuzzy, text-only) ---- */
+.picker-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(92vw, 32rem);
+  max-height: 80vh;
+  padding: 1.25rem;
+  border: 1px solid #363537;
+  border-radius: 0.75rem;
+  background-color: #1f1f1e;
+}
+.picker-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #363537;
+  border-radius: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  background-color: #161615;
+  color: #f7f1ff;
+}
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  overflow-y: auto;
+}
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background-color: transparent;
+  color: #f7f1ff;
+}
+.picker-item:hover {
+  background-color: #2a2a29;
+}
+.picker-name {
+  flex: 1 1 auto;
+}
+.picker-kind {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8b888f;
+}
 /* flexible gap that pushes the brand-bar nav buttons to the right */
 .spacer {
   flex: 1 1 auto;
@@ -262,6 +366,10 @@ button:disabled {
 
 /* ---- house picker (stacked) ---- */
 .house-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
   width: 100%;
   border: 1px solid var(--edge, #363537);
   border-radius: 0.25rem;
@@ -390,6 +498,16 @@ button:disabled {
   border-radius: 0.75rem;
   background-color: #1f1f1e;
 }
+/* the panel title stays pinned to the top as the piles scroll */
+.zones-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: -1.25rem -1.25rem 0;
+  padding: 1.25rem 1.25rem 0.5rem;
+  border-radius: 0.75rem 0.75rem 0 0;
+  background-color: #1f1f1e;
+}
 .zones-close {
   position: absolute;
   top: 0.5rem;
@@ -416,6 +534,14 @@ button:disabled {
   flex-direction: column;
   gap: 0.25rem;
 }
+/* each zone's name floats above its cards, below the pinned header */
+.zone-row .row-label {
+  position: sticky;
+  top: 3.25rem;
+  z-index: 2;
+  padding: 0.25rem 0;
+  background-color: #1f1f1e;
+}
 .zone-row .card-strip {
   flex-wrap: wrap;
   align-content: flex-start;
@@ -428,6 +554,7 @@ button:disabled {
 
 /* ---- card face: gradient frame (name banner -> type band) over a dark body ---- */
 .card {
+  position: relative;
   display: flex;
   width: 9rem;
   height: 100%;
@@ -437,18 +564,34 @@ button:disabled {
   flex-direction: column;
   overflow: hidden;
   border-radius: 0.375rem;
-  /* the gradient is the card frame, tilted 45°: the name banner (--nm) fills the
-     upper-left and the type band (--tp) fills the lower-right, with the thin side
-     borders transitioning diagonally between them */
-  background: linear-gradient(
-    140deg,
-    var(--nm, #3a3a38) 44%,
-    var(--tp, #2a2a29) 56%
-  );
+  /* the frame is two colours split by an elongated-S (ogee) boundary: the type
+     band (--tp) is the base, and the ::before overlay paints the name banner
+     (--nm) over the upper-left, masked so their border sweeps in an S with
+     horizontal tips instead of a straight diagonal. The mask stretches to the
+     card via preserveAspectRatio=none. */
+  --card-frame-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none' viewBox='0 0 100 100'%3E%3Cpath d='M0 0 L100 0 L100 30 C25 30 75 70 0 70 Z' fill='white'/%3E%3C/svg%3E");
+  background: var(--tp, #2a2a29);
   font-size: 0.75rem;
   box-shadow:
     0 4px 6px -1px rgb(0 0 0 / 0.3),
     0 2px 4px -2px rgb(0 0 0 / 0.3);
+}
+.card::before {
+  content: "";
+  position: absolute;
+  /* overhang so the blur feathers only the interior S curve; the card's own
+     overflow:hidden clips the softened outer edges, keeping the frame crisp */
+  inset: -10px;
+  z-index: 0;
+  background: var(--nm, #3a3a38);
+  -webkit-mask: var(--card-frame-mask) center / 100% 100% no-repeat;
+  mask: var(--card-frame-mask) center / 100% 100% no-repeat;
+  filter: blur(6px);
+}
+/* keep the card's contents above the ::before frame overlay */
+.card > * {
+  position: relative;
+  z-index: 1;
 }
 .card--selected {
   box-shadow: 0 0 0 2px #fce566;
@@ -467,10 +610,20 @@ button:disabled {
   filter: brightness(1.15);
 }
 .card-name {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   padding: 0.25rem 0.5rem;
   font-weight: 700;
   line-height: 1.25;
   color: var(--nm-fg, #f7f1ff);
+}
+.card-name-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* dark inner body, inset left/right so the gradient frame shows as side borders */
 .card-body {
@@ -483,13 +636,26 @@ button:disabled {
   background-color: #1d1d1c;
 }
 .card-stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
   padding: 0.25rem 0.5rem 0;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
-  font-weight: 600;
+  font-weight: 700;
+  color: #d8d5cd;
+}
+.stat-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+.stat-tag {
   text-transform: uppercase;
-  letter-spacing: 0.025em;
-  color: #b8b5ad;
+  letter-spacing: 0.05em;
+  font-size: 9px;
+  color: #8b888f;
 }
 .card-rules {
   flex: 1 1 0%;
@@ -502,6 +668,9 @@ button:disabled {
   color: #e6e3dc;
 }
 .card-kind {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   margin-top: auto;
   padding: 0.125rem 0.5rem;
   font-size: 9px;
@@ -509,6 +678,58 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--tp-fg, #8b888f);
+}
+
+/* ---- icons (static SVGs from web/assets) ---- */
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  object-fit: contain;
+}
+.icon-stat {
+  width: 1.1em;
+  height: 1.1em;
+}
+.icon-inline {
+  width: 1.05em;
+  height: 1.05em;
+  vertical-align: -0.18em;
+}
+.icon-house {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+}
+/* a 1px black outline traced on every side (hard shadows, no blur) so a house
+   emblem stays legible on any background — an outline, not a blob beneath */
+.icon-outline {
+  filter: drop-shadow(1px 0 0 rgb(0 0 0 / 0.85))
+    drop-shadow(-1px 0 0 rgb(0 0 0 / 0.85))
+    drop-shadow(0 1px 0 rgb(0 0 0 / 0.85))
+    drop-shadow(0 -1px 0 rgb(0 0 0 / 0.85));
+}
+.icon-kind {
+  width: 1.2em;
+  height: 1.2em;
+}
+/* stun token: a larger badge on the card face */
+.icon-token {
+  width: 1.4em;
+  height: 1.4em;
+  flex: 0 0 auto;
+}
+/* keys in the score pill: coloured icons plus empty slots for keys to forge */
+.score-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  vertical-align: -0.15em;
+}
+/* a key still to forge: shown dimmed rather than as an empty slot */
+.key-unforged {
+  opacity: 0.3;
 }
 
 /* ---- per-house colours (name banner / type band / edge) ---- */

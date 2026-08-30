@@ -59,6 +59,14 @@ type OnChooseCreature struct {
 	Verbs  []CreatureVerb
 }
 
+// validate requires an explicit target.
+func (e OnChooseCreature) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("OnChooseCreature")
+	}
+	return nil
+}
+
 // Text joins the verbs and the shared target, e.g.
 // "ready and fight with a friendly creature".
 func (e OnChooseCreature) Text() string {

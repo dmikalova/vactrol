@@ -20,7 +20,10 @@ var EaterOfTheDead = card.New(
 	card.WithPower(4),
 	card.WithTraits("Demon"),
 	card.WithFightOrReap(card.Then{
-		First: card.Purge{Zone: card.Discard, Type: card.Type.Creature},
+		First: card.Purge{
+			Zone: card.Discard,
+			Type: card.Type.Creature,
+		},
 		Result: card.AddPowerCounter{
 			Target: card.Target.This,
 			Amount: 1,

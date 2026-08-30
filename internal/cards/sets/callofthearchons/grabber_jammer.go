@@ -12,7 +12,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Traits: Robot
 //
 //	Your opponent's keys cost +1 Æmber.
-//	Fight/Reap: Grabber Jammer captures 1 Æmber.
+//	Fight/Reap: Grabber Jammer captures 1 Æmber from your opponent.
 var GrabberJammer = card.New(
 	"Grabber Jammer",
 	card.House.Mars,
@@ -23,5 +23,9 @@ var GrabberJammer = card.New(
 	card.WithArmor(1),
 	card.WithTraits("Robot"),
 	card.WithKeyCost(card.KeyCostChange(card.Opponent, 1)),
-	card.WithFightOrReap(card.CaptureAember{Amount: 1}),
+	card.WithFightOrReap(card.CaptureAember{
+		Amount: 1,
+		Target: card.Target.This,
+		Source: card.Opponent,
+	}),
 )

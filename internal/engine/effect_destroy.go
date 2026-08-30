@@ -13,9 +13,20 @@ type Destroy struct {
 	Target Target
 }
 
+// validate requires an explicit target.
+func (e Destroy) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("Destroy")
+	}
+	return nil
+}
+
+func (e Destroy) verb() string       { return "destroy" }
+func (e Destroy) targetText() string { return e.Target.Text() }
+
 // Text renders the effect, e.g. "destroy each creature with power 3 or lower".
 func (e Destroy) Text() string {
-	return "destroy " + e.Target.Text()
+	return e.verb() + " " + e.targetText()
 }
 
 // Resolve destroys each selected creature, letting the controller order them.

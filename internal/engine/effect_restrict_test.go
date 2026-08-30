@@ -120,6 +120,68 @@ func TestCannotPlayCreatures(t *testing.T) {
 	}
 }
 
+func TestToll(t *testing.T) {
+	// Text renders for both actions a toll can charge for.
+	if got := restrictionText(Restrictions{Toll: Toll{Action: TollPlayArtifact, Amount: 1}}); len(got) != 1 ||
+		got[0] != "Your opponent must pay you 1 Æmber in order to play an artifact." {
+		t.Errorf("play-toll text = %v", got)
+	}
+	if got := restrictionText(Restrictions{Toll: Toll{Action: TollUseArtifact, Amount: 2}}); len(got) != 1 ||
+		got[0] != "Your opponent must pay you 2 Æmber in order to use an artifact." {
+		t.Errorf("use-toll text = %v", got)
+	}
+
+	g := started(t) // player 0 active, Brobnar
+	// Player 0 controls a play-toll; player 1 will be charged to play an artifact.
+	g.AddArtifact(NewCard("Customs", Brobnar, Artifact, Common, WithTraits("Location"),
+		WithRestrictions(Restrictions{Toll: Toll{Action: TollPlayArtifact, Amount: 1}})), 0)
+
+	g.EndTurn(0)
+	g.BeginTurn(1)
+	if err := g.ChooseHouse(1, Brobnar); err != nil {
+		t.Fatalf("ChooseHouse: %v", err)
+	}
+	g.AddToHand(NewCard("Widget", Brobnar, Artifact, Common, WithTraits("Item")), 1)
+	idx := handIdx(g, 1, "Widget")
+
+	// Too poor to pay the toll: the play is rejected and the card stays in hand.
+	if _, err := g.PlayArtifact(1, idx); err != ErrCannotPayToll {
+		t.Fatalf("PlayArtifact (broke) = %v, want ErrCannotPayToll", err)
+	}
+
+	// With Æmber to spare, the toll transfers to the toll card's owner.
+	g.State.Aember[1] = 2
+	if _, err := g.PlayArtifact(1, idx); err != nil {
+		t.Fatalf("PlayArtifact: %v", err)
+	}
+	if g.Aember(1) != 1 || g.Aember(0) != 1 {
+		t.Errorf("after play toll: p1=%d p0=%d, want 1/1", g.Aember(1), g.Aember(0))
+	}
+
+	// The same gate tolls using an artifact: player 0 controls a use-toll, and
+	// player 1 must pay it to fire their own artifact's action ability.
+	g.AddArtifact(NewCard("Gatekeeper", Brobnar, Artifact, Common, WithTraits("Item"),
+		WithRestrictions(Restrictions{Toll: Toll{Action: TollUseArtifact, Amount: 1}})), 0)
+	gadget := g.AddArtifact(NewCard("Gadget", Brobnar, Artifact, Common, WithTraits("Item"),
+		WithAbility(TriggerAction, GainAember{Player: Controller, Amount: 3})), 1)
+
+	g.State.Aember[1] = 0
+	if err := g.UseAction(1, gadget); err != ErrCannotPayToll {
+		t.Fatalf("UseAction (broke) = %v, want ErrCannotPayToll", err)
+	}
+	g.State.Aember[1] = 1
+	before := g.Aember(0)
+	if err := g.UseAction(1, gadget); err != nil {
+		t.Fatalf("UseAction: %v", err)
+	}
+	if g.Aember(1) != 3 { // paid 1, then the action gained 3
+		t.Errorf("player 1 aember = %d, want 3", g.Aember(1))
+	}
+	if g.Aember(0) != before+1 {
+		t.Errorf("player 0 aember = %d, want %d (received the use toll)", g.Aember(0), before+1)
+	}
+}
+
 func TestForceActiveHouseNextTurn(t *testing.T) {
 	if got := (ForceOpponentActiveHouse{}).Text(); got != "your opponent must choose that house as their active house during their next turn" {
 		t.Errorf("text = %q", got)

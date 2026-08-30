@@ -14,6 +14,7 @@ var (
 	ErrCannotFight           = errors.New("cannot use creatures to fight this turn")
 	ErrCannotPlayCreature    = errors.New("cannot play creatures")
 	ErrCardPlayLimit         = errors.New("card-play limit reached this turn")
+	ErrCannotPayToll         = errors.New("cannot pay the toll for this action")
 	ErrMustChooseForcedHouse = errors.New("must choose the forced active house this turn")
 )
 
@@ -56,13 +57,30 @@ func (g *Game) ChooseHouse(player int, house House) error {
 	if g.State.ActivePlayer != player {
 		return ErrNotActivePlayer
 	}
-	if fh := g.State.ForcedHouse[player]; fh != HouseNone && house != fh {
+	// A forced house (Control the Weak) only binds when the player actually has it;
+	// if they cannot choose it, cannot overrides must and any house is allowed.
+	if fh := g.State.ForcedHouse[player]; fh != HouseNone && house != fh && g.playerHasHouse(player, fh) {
 		return ErrMustChooseForcedHouse
 	}
 	g.State.ActiveHouse = house
 	g.logf("%s chooses house %s", g.names[player], house)
 	g.offerArchives(player)
 	return nil
+}
+
+// playerHasHouse reports whether house is one the player may choose — a house in
+// their declared deck houses. When deck houses are unknown (unset), every house
+// is treated as available.
+func (g *Game) playerHasHouse(player int, house House) bool {
+	if len(g.houses[player]) == 0 {
+		return true
+	}
+	for _, h := range g.houses[player] {
+		if h == house {
+			return true
+		}
+	}
+	return false
 }
 
 // Ready and draw: at the end of your turn every card you control readies (turns
@@ -144,6 +162,7 @@ func (g *Game) forgeKey(player int) {
 	}
 	g.State.Aember[player] -= cost
 	g.State.Keys[player]++
+	g.chooseKeyColor(player)
 	g.logf("%s forges a key (%d/%d)", g.names[player], g.State.Keys[player], KeysToWin)
 	for _, id := range g.allInPlay(player) {
 		g.triggerAbilities(id, TriggerAfterForgeKey, 0, false)
@@ -152,4 +171,43 @@ func (g *Game) forgeKey(player int) {
 		g.State.Winner = player
 		g.logf("%s wins the game!", g.names[player])
 	}
+}
+
+// chooseKeyColor asks the player which colour the key they just forged should be,
+// choosing among the colours they have not forged yet, and stores it. The final
+// key's colour is forced (only one remains), so it is set without a prompt. There
+// is no default: every UI is asked whenever more than one colour is available.
+func (g *Game) chooseKeyColor(player int) {
+	remaining := g.remainingKeyColors(player)
+	if len(remaining) == 0 {
+		return
+	}
+	choice := remaining[0]
+	if len(remaining) > 1 {
+		labels := make([]string, len(remaining))
+		for i, c := range remaining {
+			labels[i] = c.String()
+		}
+		if idx := g.chooseOption(player, "", KeyColorPrompt, labels); idx >= 0 && idx < len(remaining) {
+			choice = remaining[idx]
+		}
+	}
+	g.State.KeyColors[player][g.State.Keys[player]-1] = choice
+	g.logf("%s forges a %s key", g.names[player], choice)
+}
+
+// remainingKeyColors lists the key colours the player has not yet forged, in
+// canonical order.
+func (g *Game) remainingKeyColors(player int) []KeyColor {
+	var used [4]bool
+	for i := 0; i < g.State.Keys[player]-1; i++ {
+		used[g.State.KeyColors[player][i]] = true
+	}
+	var out []KeyColor
+	for _, c := range keyColorOrder {
+		if !used[c] {
+			out = append(out, c)
+		}
+	}
+	return out
 }

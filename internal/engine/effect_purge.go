@@ -187,6 +187,14 @@ type PurgeCreature struct {
 	Target Target
 }
 
+// validate requires an explicit target.
+func (e PurgeCreature) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("PurgeCreature")
+	}
+	return nil
+}
+
 // Text renders the effect, e.g. "purge this creature".
 func (e PurgeCreature) Text() string { return "purge " + e.Target.Text() }
 

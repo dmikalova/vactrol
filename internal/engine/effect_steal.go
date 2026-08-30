@@ -1,0 +1,23 @@
+package engine
+
+import "fmt"
+
+// Stealing Æmber moves it from the opponent's pool into your own. You can only
+// steal as much Æmber as the opponent actually has.
+//
+//rulebook:effect Steal Æmber
+type StealAember struct {
+	Amount int
+}
+
+// Text renders the effect, e.g. "steal 1 Æmber".
+func (e StealAember) Text() string { return fmt.Sprintf("steal %d Æmber", e.Amount) }
+
+// Resolve moves the Æmber from the opponent's pool to the controller's.
+func (e StealAember) Resolve(ctx *EffectContext) {
+	opp := ctx.Opponent()
+	amt := min(e.Amount, ctx.Resolver.Aember(opp))
+	ctx.Resolver.SetAember(opp, ctx.Resolver.Aember(opp)-amt)
+	ctx.Resolver.SetAember(ctx.Controller, ctx.Resolver.Aember(ctx.Controller)+amt)
+	ctx.Resolver.Logf("%s steals %d Æmber from %s", ctx.Resolver.PlayerName(ctx.Controller), amt, ctx.Resolver.PlayerName(opp))
+}

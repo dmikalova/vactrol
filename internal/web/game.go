@@ -146,6 +146,13 @@ type game struct {
 	// and purge piles) for that player. -1 keeps the viewer closed.
 	zonesPlayer int
 
+	// Manual (sandbox) mode lives on the engine (g.g.Manual()); these back its UI:
+	// the fuzzy card picker's open state and query, and the cached card pool it
+	// searches.
+	pickerOpen  bool
+	pickerQuery string
+	allDefs     []engine.CardDefinition
+
 	// dragging is set while a hand card is being dragged, so the board shows as a
 	// drop zone. It is cleared when the drag ends or the card is dropped.
 	dragging bool
@@ -165,7 +172,7 @@ const persistKey = "vactrol.match"
 
 // snapshotVersion tags persisted state; bump it when an engine change makes older
 // snapshots invalid so a stale one is flushed instead of restored.
-const snapshotVersion = 1
+const snapshotVersion = 2
 
 // snapshot is the persisted match. The seed deterministically rebuilds the
 // catalog and card ids; the flat GameState carries everything mutable. All other
@@ -290,11 +297,18 @@ func (g *game) install(eg *engine.Game, houses [2][]engine.House) {
 	ch := &webChooser{g: g, reply: make(chan chooseReply, 1), optionReply: make(chan int, 1)}
 	eg.SetChooser(0, ch)
 	eg.SetChooser(1, ch)
+	// Declare each player's deck houses so a forced house they lack is ignored
+	// (cannot overrides must); the human is prompted for each key's colour.
+	eg.SetPlayerHouses(0, houses[0])
+	eg.SetPlayerHouses(1, houses[1])
 	g.g = eg
 	g.chooser = ch
 	g.deckHouses = houses
 	if g.defByName == nil {
 		g.defByName = cardsByName()
+	}
+	if g.allDefs == nil {
+		g.allDefs = cards.All()
 	}
 }
 
@@ -328,7 +342,7 @@ func (g *game) clearSelection() {
 // runAction resolves an engine mutation on a background goroutine so the UI stays
 // responsive while an effect blocks on the chooser. When it finishes it advances
 // the phase and clears any transient selection on the UI goroutine.
-func (g *game) runAction(ctx app.Context, fn func()) {
+func (g *game) runAction(ctx app.Context, fn func() error) {
 	if g.busy {
 		return
 	}
@@ -340,9 +354,12 @@ func (g *game) runAction(ctx app.Context, fn func()) {
 	// any Dispatch whose source element is no longer mounted — which would leave
 	// the UI stuck on "resolving…" after a chooser.
 	ctx.Async(func() {
-		fn()
+		err := fn()
 		g.dispatch(func(ctx app.Context) {
 			g.busy = false
+			if err != nil {
+				g.status = err.Error()
+			}
 			g.afterAction()
 			g.save(ctx)
 		})
@@ -428,7 +445,7 @@ func (g *game) pickHouse(h engine.House) app.EventHandler {
 			return
 		}
 		p := g.active()
-		g.runAction(ctx, func() { _ = g.g.ChooseHouse(p, h) })
+		g.runAction(ctx, func() error { return g.g.ChooseHouse(p, h) })
 	}
 }
 
@@ -437,9 +454,10 @@ func (g *game) endTurn(ctx app.Context, _ app.Event) {
 		return
 	}
 	p := g.active()
-	g.runAction(ctx, func() {
+	g.runAction(ctx, func() error {
 		g.g.EndTurn(p)
 		g.g.BeginTurn(1 - p) // forge + start-of-turn triggers for the next player
+		return nil
 	})
 }
 
@@ -455,16 +473,16 @@ func (g *game) play(ctx app.Context, _ app.Event) {
 	switch def.Type {
 	case engine.Creature:
 		if len(g.g.Battleline(p)) == 0 {
-			g.runAction(ctx, func() { _, _ = g.g.PlayCreature(p, idx, false) })
+			g.runAction(ctx, func() error { _, err := g.g.PlayCreature(p, idx, false); return err })
 			return
 		}
 		g.phase = phaseFlank
 	case engine.Artifact:
-		g.runAction(ctx, func() { _, _ = g.g.PlayArtifact(p, idx) })
+		g.runAction(ctx, func() error { _, err := g.g.PlayArtifact(p, idx); return err })
 	case engine.Action:
-		g.runAction(ctx, func() { _ = g.g.PlayAction(p, idx) })
+		g.runAction(ctx, func() error { return g.g.PlayAction(p, idx) })
 	case engine.Upgrade:
-		g.runAction(ctx, func() { _, _ = g.g.PlayUpgrade(p, idx) })
+		g.runAction(ctx, func() error { _, err := g.g.PlayUpgrade(p, idx); return err })
 	}
 }
 
@@ -474,7 +492,7 @@ func (g *game) playFlank(left bool) app.EventHandler {
 			return
 		}
 		p, idx := g.active(), g.selHand
-		g.runAction(ctx, func() { _, _ = g.g.PlayCreature(p, idx, left) })
+		g.runAction(ctx, func() error { _, err := g.g.PlayCreature(p, idx, left); return err })
 	}
 }
 
@@ -483,7 +501,7 @@ func (g *game) discard(ctx app.Context, _ app.Event) {
 		return
 	}
 	p, idx := g.active(), g.selHand
-	g.runAction(ctx, func() { _ = g.g.DiscardFromHand(p, idx) })
+	g.runAction(ctx, func() error { return g.g.DiscardFromHand(p, idx) })
 }
 
 // ---- drag and drop (hand → board) ----
@@ -517,7 +535,7 @@ func (g *game) dropOnBoard(ctx app.Context, e app.Event) {
 	if g.busy || g.choosing || g.choosingOption || g.phase != phaseMain || g.selKind != selHand {
 		return
 	}
-	if !g.playableFromHand(g.g.Def(g.sel)) {
+	if !g.playableFromHand(g.sel) {
 		return
 	}
 	g.play(ctx, e)
@@ -530,7 +548,7 @@ func (g *game) reap(ctx app.Context, _ app.Event) {
 		return
 	}
 	p, id := g.active(), g.sel
-	g.runAction(ctx, func() { _ = g.g.Reap(p, id) })
+	g.runAction(ctx, func() error { return g.g.Reap(p, id) })
 }
 
 func (g *game) useAction(ctx app.Context, _ app.Event) {
@@ -541,7 +559,7 @@ func (g *game) useAction(ctx app.Context, _ app.Event) {
 		return
 	}
 	p, id := g.active(), g.sel
-	g.runAction(ctx, func() { _ = g.g.UseAction(p, id) })
+	g.runAction(ctx, func() error { return g.g.UseAction(p, id) })
 }
 
 // startFight enters fight-target selection for the selected creature, after
@@ -565,7 +583,7 @@ func (g *game) fightTargetID(ctx app.Context, defender engine.LocalID) {
 		return
 	}
 	p, att := g.active(), g.attacker
-	g.runAction(ctx, func() { _ = g.g.Fight(p, att, defender) })
+	g.runAction(ctx, func() error { return g.g.Fight(p, att, defender) })
 }
 
 func (g *game) cancelTargeting(ctx app.Context, _ app.Event) {
@@ -603,11 +621,10 @@ func (g *game) chooseOptionIdx(i int) app.EventHandler {
 // onScorePillClick opens the out-of-play zone viewer for the clicked player. The
 // player index is read from the pill's data attribute rather than captured in a
 // closure, so the single stable handler stays valid across re-renders (go-app
-// compares event handlers by function pointer).
+// compares event handlers by function pointer). The viewer is read-only, so it
+// stays available during a prompt — e.g. to inspect archives before deciding
+// whether to take them into hand.
 func (g *game) onScorePillClick(ctx app.Context, _ app.Event) {
-	if g.busy || g.choosing || g.choosingOption {
-		return
-	}
 	p, err := strconv.Atoi(ctx.JSSrc().Get("dataset").Get("player").String())
 	if err != nil {
 		return
@@ -624,6 +641,89 @@ func (g *game) closeZones(_ app.Context, _ app.Event) {
 // backdrop's close handler, so only clicks outside the panel dismiss the viewer.
 func (g *game) stopClick(_ app.Context, e app.Event) {
 	e.Call("stopPropagation")
+}
+
+// ---- manual (sandbox) mode ----
+
+// toggleManual turns the engine's sandbox mode on or off, lifting house
+// restrictions and revealing the manual controls.
+func (g *game) toggleManual(ctx app.Context, _ app.Event) {
+	if g.busy || g.choosing || g.choosingOption {
+		return
+	}
+	g.g.SetManual(!g.g.Manual())
+	g.save(ctx)
+}
+
+// manualMove moves the selected card to a resting zone, ignoring the normal rules.
+func (g *game) manualMove(dest engine.ManualZone) app.EventHandler {
+	return func(ctx app.Context, _ app.Event) {
+		if !g.hasSel || !g.g.Manual() {
+			return
+		}
+		g.g.ManualMove(g.sel, dest)
+		g.clearSelection()
+		g.save(ctx)
+	}
+}
+
+// manualReady clears the selected card's exhausted flag.
+func (g *game) manualReady(ctx app.Context, _ app.Event) {
+	if !g.hasSel || !g.g.Manual() {
+		return
+	}
+	g.g.ManualSetExhausted(g.sel, false)
+	g.save(ctx)
+}
+
+// manualExhaust sets the selected card's exhausted flag.
+func (g *game) manualExhaust(ctx app.Context, _ app.Event) {
+	if !g.hasSel || !g.g.Manual() {
+		return
+	}
+	g.g.ManualSetExhausted(g.sel, true)
+	g.save(ctx)
+}
+
+// selectZoneCard selects a card shown in the zone viewer (in manual mode) and
+// closes the viewer, so the manual controls can act on it (e.g. move it to hand).
+func (g *game) selectZoneCard(_ app.Context, id engine.LocalID) {
+	g.sel, g.selKind, g.selHand, g.hasSel = id, selOther, -1, true
+	g.detailDef = nil
+	g.zonesPlayer = -1
+	g.status = ""
+}
+
+// openPicker opens the fuzzy card picker to add an arbitrary card to hand.
+func (g *game) openPicker(_ app.Context, _ app.Event) {
+	g.pickerOpen = true
+	g.pickerQuery = ""
+}
+
+func (g *game) closePicker(_ app.Context, _ app.Event) { g.pickerOpen = false }
+
+// pickerInput records the search box's text as the player types.
+func (g *game) pickerInput(ctx app.Context, _ app.Event) {
+	g.pickerQuery = ctx.JSSrc().Get("value").String()
+}
+
+// addPickedCard adds the chosen card definition to the active player's hand.
+func (g *game) addPickedCard(def engine.CardDefinition) app.EventHandler {
+	return func(ctx app.Context, _ app.Event) {
+		g.g.ManualAddCard(def, g.active())
+		g.pickerOpen = false
+		g.save(ctx)
+	}
+}
+
+// isInPlay reports whether a card is on either player's battleline or artifact row.
+func (g *game) isInPlay(id engine.LocalID) bool {
+	for p := 0; p < 2; p++ {
+		if containsID(g.g.Battleline(p), id) || containsID(g.g.Artifacts(p), id) {
+			return true
+		}
+	}
+	return false
 }
 
 // onLogCardClick opens the detail panel on a card named in the log. The name is

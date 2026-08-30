@@ -16,7 +16,7 @@ import (
 //	Armor:  1
 //	Traits: Knight • Spirit
 //
-//	After a creature is destroyed fighting Francus, Francus captures 1 Æmber.
+//	After a creature is destroyed fighting Francus, Francus captures 1 Æmber from your opponent.
 func TestFrancus(t *testing.T) {
 	t.Run("captures 1 Æmber when a creature is destroyed fighting it", func(t *testing.T) {
 		var prey ct.Card

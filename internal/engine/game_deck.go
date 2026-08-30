@@ -10,17 +10,24 @@ package engine
 func (g *Game) drawOne(player int) bool {
 	deck := &g.State.Deck[player]
 	if deck.Count == 0 {
-		discard := &g.State.Discard[player]
-		if discard.Count == 0 {
+		if g.State.Discard[player].Count == 0 {
 			return false
 		}
-		for discard.Count > 0 {
-			deck.add(discard.removeAt(0))
-		}
-		g.Shuffle(player)
+		g.shuffleDiscardIntoDeck(player)
 	}
 	g.State.Hand[player].add(deck.removeAt(0))
 	return true
+}
+
+// shuffleDiscardIntoDeck moves a player's whole discard pile into their deck and
+// shuffles it — how KeyForge recycles the discard, both when the draw zone runs
+// out and when a card (Help from Future Self) calls for it directly.
+func (g *Game) shuffleDiscardIntoDeck(player int) {
+	deck, discard := &g.State.Deck[player], &g.State.Discard[player]
+	for discard.Count > 0 {
+		deck.add(discard.removeAt(0))
+	}
+	g.Shuffle(player)
 }
 
 // draw draws count cards into the player's hand, stopping early only when the

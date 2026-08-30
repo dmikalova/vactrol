@@ -34,14 +34,18 @@ func TestHealEffect(t *testing.T) {
 }
 
 func TestHealValidate(t *testing.T) {
-	if err := (Heal{Fully: true, Amount: 2}).validate(); err == nil {
+	this := Target{Kind: TargetThisCreature}
+	if err := (Heal{Target: this, Fully: true, Amount: 2}).validate(); err == nil {
 		t.Error("Heal with both Amount and Fully should be invalid")
 	}
-	if err := (Heal{Fully: true}).validate(); err != nil {
+	if err := (Heal{Target: this, Fully: true}).validate(); err != nil {
 		t.Errorf("full heal should be valid, got %v", err)
 	}
-	if err := (Heal{Amount: 2}).validate(); err != nil {
+	if err := (Heal{Target: this, Amount: 2}).validate(); err != nil {
 		t.Errorf("fixed heal should be valid, got %v", err)
+	}
+	if err := (Heal{Fully: true}).validate(); err == nil {
+		t.Error("an unset target should be rejected")
 	}
 }
 

@@ -14,10 +14,12 @@ import (
 // ---- messages ----
 
 // chooseRequestMsg is posted by the engine (via the chooser bridge) when an
-// effect needs the active player to pick a creature.
+// effect needs the active player to pick a creature or a labeled option.
 type chooseRequestMsg struct {
 	prompt     string
 	candidates []engine.LocalID
+	options    []string // set when the engine asked for a labeled option choice
+	isOption   bool
 }
 
 // actionDoneMsg reports that a play/use/fight action goroutine has finished.
@@ -38,8 +40,9 @@ type chooseReply struct {
 // teaChooser adapts the engine's synchronous Chooser to bubbletea's event loop:
 // it posts a chooseRequestMsg and blocks until the UI replies with the id.
 type teaChooser struct {
-	snd   *sender
-	reply chan chooseReply
+	snd         *sender
+	reply       chan chooseReply
+	optionReply chan int
 }
 
 func (c *teaChooser) ChooseCreature(_, prompt string, candidates []engine.LocalID) (engine.LocalID, bool) {
@@ -49,6 +52,17 @@ func (c *teaChooser) ChooseCreature(_, prompt string, candidates []engine.LocalI
 	c.snd.send(chooseRequestMsg{prompt: prompt, candidates: candidates})
 	r := <-c.reply
 	return r.id, r.ok
+}
+
+// ChooseOption posts a labeled option choice (e.g. which key colour to forge) and
+// blocks until the UI picks one. Implementing it means the TUI prompts rather
+// than silently taking the first option.
+func (c *teaChooser) ChooseOption(_, prompt string, options []string) int {
+	if len(options) <= 1 {
+		return 0
+	}
+	c.snd.send(chooseRequestMsg{prompt: prompt, options: options, isOption: true})
+	return <-c.optionReply
 }
 
 // ---- model ----
@@ -61,6 +75,7 @@ const (
 	phaseFlank                         // choosing a flank for a creature being played
 	phaseCreatureMenu                  // reap/fight/action menu for one of your creatures
 	phaseChoose                        // engine asked to pick a creature (on the board)
+	phaseChooseOption                  // engine asked to pick a labeled option (e.g. key colour)
 	phaseTargetFight                   // picking an enemy to fight (on the board)
 	phaseDiscard                       // viewing the discard piles
 	phaseBusy                          // an action is resolving
@@ -124,9 +139,10 @@ type gameModel struct {
 	playHandPos int // hand position to restore the cursor to after a play (-1 = none)
 	pendingHand int // hand index of a creature awaiting its flank choice
 
-	choosePrompt string
-	chooseCands  []engine.LocalID
-	chooseCur    int
+	choosePrompt  string
+	chooseCands   []engine.LocalID
+	chooseOptions []string
+	chooseCur     int
 
 	fightAttacker engine.LocalID
 	fightCands    []engine.LocalID
@@ -150,9 +166,11 @@ type gameModel struct {
 func newGameModel(snd *sender, w, h int) gameModel {
 	seed := time.Now().UnixNano()
 	g, houses := match.New("Player 1", "Player 2", seed)
-	ch := &teaChooser{snd: snd, reply: make(chan chooseReply, 1)}
+	ch := &teaChooser{snd: snd, reply: make(chan chooseReply, 1), optionReply: make(chan int, 1)}
 	g.SetChooser(0, ch)
 	g.SetChooser(1, ch)
+	g.SetPlayerHouses(0, houses[0])
+	g.SetPlayerHouses(1, houses[1])
 	g.BeginTurn(0) // first turn: no Æmber yet, so forging never triggers here
 	m := gameModel{
 		snd: snd, g: g, chooser: ch,
@@ -239,9 +257,14 @@ func (m gameModel) Update(msg tea.Msg) (gameModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case chooseRequestMsg:
 		m.choosePrompt = msg.prompt
-		m.chooseCands = msg.candidates
 		m.chooseCur = 0
-		m.phase = phaseChoose
+		if msg.isOption {
+			m.chooseOptions = msg.options
+			m.phase = phaseChooseOption
+		} else {
+			m.chooseCands = msg.candidates
+			m.phase = phaseChoose
+		}
 		return m, nil
 	case actionDoneMsg:
 		if m.suppressErr {
@@ -281,6 +304,8 @@ func (m gameModel) handleKey(k tea.KeyMsg) (gameModel, tea.Cmd) {
 		return m.handleCreatureMenuKey(k)
 	case phaseChoose:
 		return m.handleChooseKey(k)
+	case phaseChooseOption:
+		return m.handleChooseOptionKey(k)
 	case phaseTargetFight:
 		return m.handleFightKey(k)
 	case phaseDiscard:
@@ -398,6 +423,21 @@ func (m gameModel) handleChooseKey(k tea.KeyMsg) (gameModel, tea.Cmd) {
 	case "c", "esc":
 		m.chooser.reply <- chooseReply{ok: false}
 		m.suppressErr = true
+		m.phase = phaseBusy
+	}
+	return m, nil
+}
+
+// handleChooseOptionKey drives a labeled option prompt (e.g. which key colour to
+// forge). The choice is mandatory, so there is no cancel.
+func (m gameModel) handleChooseOptionKey(k tea.KeyMsg) (gameModel, tea.Cmd) {
+	switch k.String() {
+	case "up", "k":
+		m.chooseCur = wrap(m.chooseCur, -1, len(m.chooseOptions))
+	case "down", "j":
+		m.chooseCur = wrap(m.chooseCur, 1, len(m.chooseOptions))
+	case "enter", " ":
+		m.chooser.optionReply <- m.chooseCur
 		m.phase = phaseBusy
 	}
 	return m, nil
@@ -835,6 +875,18 @@ func (m gameModel) bottom() string {
 	case phaseChoose:
 		return selectedStyle.Render(m.choosePrompt) + "\n" +
 			helpStyle.Render("↑/↓ pick a highlighted creature · enter choose · c cancel")
+	case phaseChooseOption:
+		var b strings.Builder
+		b.WriteString(selectedStyle.Render(m.choosePrompt) + "\n")
+		for i, opt := range m.chooseOptions {
+			if i == m.chooseCur {
+				b.WriteString(selectedStyle.Render(cursor(true)+opt) + "\n")
+			} else {
+				b.WriteString(cursor(false) + opt + "\n")
+			}
+		}
+		b.WriteString(helpStyle.Render("↑/↓ · enter choose"))
+		return b.String()
 	case phaseTargetFight:
 		return selectedStyle.Render("Choose an enemy creature to fight") + "\n" +
 			helpStyle.Render("↑/↓ pick a highlighted enemy · enter fight · c cancel")

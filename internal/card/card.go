@@ -37,10 +37,25 @@ type (
 	// PlayCardLimit caps cards a relative player may play in a turn; use it as
 	// card.Restrictions{PlayCardLimit: card.PlayCardLimit{Player: card.Opponent, Amount: 2}}.
 	PlayCardLimit = engine.PlayCardLimit
+	// Toll is Æmber a card makes its controller's opponent pay to play or use an
+	// artifact; use it as card.Restrictions{Toll: card.Toll{Action: card.TollOn.PlayArtifact, Amount: 1}}.
+	Toll = engine.Toll
+	// TollAction names the action a Toll charges for; the ready-made values live in
+	// card.TollOn.
+	TollAction = engine.TollAction
 	// AttackDamage customizes the damage a creature deals when it fights (Valdr's
 	// flank bonus, Ether Spider dealing none); pass it to card.WithAttackDamage.
 	AttackDamage = engine.AttackDamage
 )
+
+// TollOn groups the actions a Toll can charge for, e.g. card.TollOn.PlayArtifact.
+var TollOn = struct {
+	PlayArtifact TollAction
+	UseArtifact  TollAction
+}{
+	PlayArtifact: engine.TollPlayArtifact,
+	UseArtifact:  engine.TollUseArtifact,
+}
 
 // KeyCostChange builds a continuous key-cost change a card imposes while in play,
 // e.g. card.KeyCostChange(card.Opponent, 1). The affected player — card.Controller,

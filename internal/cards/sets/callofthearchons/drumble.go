@@ -24,6 +24,10 @@ var Drumble = card.New(
 	card.WithAbility(
 		card.Trigger.Play, card.Conditional{
 			Cond: card.OpponentAemberAtLeast{Amount: 7},
-			Then: card.CaptureAember{All: true},
+			Then: card.CaptureAember{
+				All:    true,
+				Target: card.Target.This,
+				Source: card.Opponent,
+			},
 		}),
 )

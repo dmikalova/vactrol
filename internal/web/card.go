@@ -16,10 +16,13 @@ type cardView struct {
 
 	ID         engine.LocalID
 	Title      string
-	HouseCls   string // house-derived border/background classes
-	Stat       string // compact stat line (power, damage, Æmber…)
-	Rules      string // rules/ability text for the face
-	Kind       string // card type label shown at the foot
+	HouseCls   string   // house-derived border/background classes
+	Emblem     string   // house emblem asset stem ("" for none)
+	TypeIcon   string   // card-type icon asset stem
+	Stat       []app.UI // compact stat nodes (power, damage, Æmber… with icons)
+	Rules      string   // rules/ability text for the face
+	Kind       string   // card type label shown at the foot
+	Stunned    bool     // shows a stun token on the face
 	Selected   bool
 	Targetable bool
 	Dimmed     bool
@@ -76,16 +79,23 @@ func (c *cardView) Render() app.UI {
 	}
 
 	return div.Body(
-		app.Div().Class("card-name").Text(c.Title),
+		app.Div().Class("card-name").Body(
+			app.If(c.Emblem != "", func() app.UI { return icon(c.Emblem, "icon-house", "icon-outline") }),
+			app.Span().Class("card-name-text").Text(c.Title),
+			app.If(c.Stunned, func() app.UI { return icon("stun", "icon-token") }),
+		),
 		app.Div().Class("card-body").Body(
-			app.If(c.Stat != "", func() app.UI {
-				return app.Div().Class("card-stat").Text(c.Stat)
+			app.If(len(c.Stat) > 0, func() app.UI {
+				return app.Div().Class("card-stat").Body(c.Stat...)
 			}),
 			app.If(c.Rules != "", func() app.UI {
 				return app.Div().Class("card-rules").Text(c.Rules)
 			}),
 		),
-		app.Div().Class("card-kind").Text(c.Kind),
+		app.Div().Class("card-kind").Body(
+			app.If(c.TypeIcon != "", func() app.UI { return icon(c.TypeIcon, "icon-kind") }),
+			app.Span().Text(c.Kind),
+		),
 	)
 }
 

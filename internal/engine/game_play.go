@@ -30,12 +30,19 @@ func (g *Game) PlayCreature(player, handIndex int, flankLeft bool) (LocalID, err
 	return id, nil
 }
 
-// PlayArtifact plays an artifact from hand into the artifact row.
+// PlayArtifact plays an artifact from hand into the artifact row. If the opponent
+// controls a card that tolls artifact plays (Customs Office), the player must pay
+// that toll first and cannot play the artifact if they cannot.
 func (g *Game) PlayArtifact(player, handIndex int) (LocalID, error) {
-	id, err := g.takeFromHand(player, handIndex, Artifact)
+	id, err := g.validateHandPlay(player, handIndex, Artifact)
 	if err != nil {
 		return 0, err
 	}
+	if err := g.chargeToll(player, TollPlayArtifact); err != nil {
+		return 0, err
+	}
+	g.State.Hand[player].removeAt(handIndex)
+	g.State.CardsPlayedThisTurn[player]++
 	g.State.Cards[id].Exhausted = true // enters play exhausted; readies during the end-of-turn ready step
 	g.State.Artifacts[player].add(id)
 	g.logf("%s plays artifact %s", g.names[player], g.Name(id))
@@ -43,6 +50,30 @@ func (g *Game) PlayArtifact(player, handIndex int) (LocalID, error) {
 	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
 	g.fireArtifactPlayed(player, id)
 	return id, nil
+}
+
+// chargeToll makes player pay every toll an opponent's in-play card imposes for
+// action (Customs Office, Tentacus), moving that Æmber to the opponent. It is the
+// single cost gate the play and use sites share: it changes nothing and returns
+// ErrCannotPayToll when player cannot pay the full amount owed.
+func (g *Game) chargeToll(player int, action TollAction) error {
+	payee := 1 - player
+	owed := 0
+	for _, id := range g.allInPlay(payee) {
+		if t := g.cat.def(id).Restricts.Toll; t.Amount > 0 && t.Action == action {
+			owed += t.Amount
+		}
+	}
+	if owed == 0 {
+		return nil
+	}
+	if g.State.Aember[player] < owed {
+		return ErrCannotPayToll
+	}
+	g.State.Aember[player] -= owed
+	g.State.Aember[payee] += owed
+	g.logf("%s pays %d Æmber to %s to %s", g.names[player], owed, g.names[payee], action.phrase())
+	return nil
 }
 
 // PlayAction plays an action card: its Æmber bonus and "Play:" abilities resolve,
@@ -138,15 +169,30 @@ func (g *Game) DiscardCardFromHand(owner int, id LocalID) {
 
 // inActiveHouse reports whether a card of the given definition matches the
 // active house for the purpose of PLAYING or discarding it from hand: true when
-// no house has been chosen or the card's own house is the active house. Versatile
-// does not apply here — it only relaxes using a card already in play (see
-// usableInActiveHouse).
+// no house has been chosen or the card's own house is the active house. Manual
+// (sandbox) mode lifts the restriction. Versatile does not apply here — it only
+// relaxes using a card already in play (see usableInActiveHouse).
 func (g *Game) inActiveHouse(def *CardDefinition) bool {
-	return g.State.ActiveHouse == HouseNone || def.House == g.State.ActiveHouse
+	return g.manual || g.State.ActiveHouse == HouseNone || def.House == g.State.ActiveHouse
 }
 
 // takeFromHand validates and removes a card of the wanted type from a hand.
 func (g *Game) takeFromHand(player, handIndex int, want CardType) (LocalID, error) {
+	id, err := g.validateHandPlay(player, handIndex, want)
+	if err != nil {
+		return 0, err
+	}
+	g.State.Hand[player].removeAt(handIndex)
+	g.State.CardsPlayedThisTurn[player]++
+	return id, nil
+}
+
+// validateHandPlay runs the read-only checks that a hand card may be played —
+// game not over, active player, no card-play limit reached, index in hand, right
+// type, active house — and returns the card without mutating the hand. It is the
+// shared validation step for takeFromHand and for plays that must charge a cost
+// (PlayArtifact) only once the play is otherwise legal.
+func (g *Game) validateHandPlay(player, handIndex int, want CardType) (LocalID, error) {
 	if g.State.Winner >= 0 {
 		return 0, ErrGameOver
 	}
@@ -168,9 +214,35 @@ func (g *Game) takeFromHand(player, handIndex int, want CardType) (LocalID, erro
 	if !g.inActiveHouse(def) {
 		return 0, ErrWrongHouse
 	}
-	hand.removeAt(handIndex)
-	g.State.CardsPlayedThisTurn[player]++
 	return id, nil
+}
+
+// CanPlay reports whether the player can play the given hand card right now: nil
+// if playable, otherwise the reason (wrong house, card-play limit, creatures
+// barred, or an upgrade with no host). It mirrors the checks the PlayX methods
+// enforce, so a UI can dim unplayable cards and explain why before the click.
+func (g *Game) CanPlay(player int, id LocalID) error {
+	if g.State.Winner >= 0 {
+		return ErrGameOver
+	}
+	if g.State.ActivePlayer != player {
+		return ErrNotActivePlayer
+	}
+	def := g.cat.def(id)
+	if def.Type == Creature && g.cannotPlayCreatures(player) {
+		return ErrCannotPlayCreature
+	}
+	if g.cannotPlayCard(player) {
+		return ErrCardPlayLimit
+	}
+	if !g.inActiveHouse(def) {
+		return ErrWrongHouse
+	}
+	if def.Type == Upgrade &&
+		len(g.State.Battleline[player].slice()) == 0 && len(g.State.Battleline[1-player].slice()) == 0 {
+		return ErrNoTarget
+	}
+	return nil
 }
 
 // applyAemberBonus grants a card's Æmber pips to its controller.

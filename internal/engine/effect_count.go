@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 // Count computes a number from live game state, for effects whose magnitude
 // scales with the board — e.g. "for each key your opponent has forged, gain 1
 // Æmber". It both yields the value (Value) and renders the leading "for each ..."
@@ -47,13 +49,104 @@ func (e CardsInArchives) CountText() string {
 	return "card in your archives"
 }
 
-// FriendlyCreaturesInPlay counts the creatures the controller has in play.
-type FriendlyCreaturesInPlay struct{}
-
-// Value returns how many creatures the controller has in play.
-func (FriendlyCreaturesInPlay) Value(ctx *EffectContext) int {
-	return len(ctx.Resolver.Battleline(ctx.Controller))
+// InPlay selects the cards a player has in play that match its filters — of a
+// given type and house — and serves two roles from one description. As a Count (a
+// Per clause) it yields the match count and renders the repeated "for each ..."
+// noun; as a Condition it is met when the count reaches Amount, which defaults to
+// one. This unifies the several friendly-creature counts and conditions, e.g.
+// InPlay{Player: Controller, Type: Creature} or the house-filtered
+// InPlay{Player: Controller, Type: Creature, House: Mars}.
+type InPlay struct {
+	Player Player
+	// Type filters by card type; the zero value counts any type.
+	Type CardType
+	// House filters by house; the zero value (HouseNone) counts any house.
+	House House
+	// Amount is the minimum the Condition role requires; zero means at least one.
+	Amount int
 }
 
-// CountText renders the singular noun the "for each" clause repeats.
-func (FriendlyCreaturesInPlay) CountText() string { return "friendly creature in play" }
+// Value counts the matching cards the player has in play.
+func (e InPlay) Value(ctx *EffectContext) int {
+	n := 0
+	for _, id := range e.set(ctx) {
+		if e.House == HouseNone || ctx.Resolver.House(id) == e.House {
+			n++
+		}
+	}
+	return n
+}
+
+// Met reports whether at least Amount (default one) matching cards are in play.
+func (e InPlay) Met(ctx *EffectContext) bool {
+	return e.Value(ctx) >= e.threshold()
+}
+
+// set returns the player's in-play ids the type filter considers: the battleline
+// for creatures, the artifact row for artifacts, or both when the type is unset.
+func (e InPlay) set(ctx *EffectContext) []LocalID {
+	p := ctx.PlayerFor(e.Player)
+	switch e.Type {
+	case Creature:
+		return ctx.Resolver.Battleline(p)
+	case Artifact:
+		return ctx.Resolver.Artifacts(p)
+	default:
+		return append(ctx.Resolver.Battleline(p), ctx.Resolver.Artifacts(p)...)
+	}
+}
+
+// threshold is the Condition's required count, defaulting to one.
+func (e InPlay) threshold() int {
+	if e.Amount < 1 {
+		return 1
+	}
+	return e.Amount
+}
+
+// who renders the controlling side as "friendly" or "enemy".
+func (e InPlay) who() string {
+	if e.Player == Opponent {
+		return "enemy"
+	}
+	return "friendly"
+}
+
+// typeNoun renders the filtered type as a noun.
+func (e InPlay) typeNoun() string {
+	switch e.Type {
+	case Creature:
+		return "creature"
+	case Artifact:
+		return "artifact"
+	default:
+		return "card"
+	}
+}
+
+// noun renders the "<side> [house ]<type>" phrase the text roles share.
+func (e InPlay) noun() string {
+	if e.House != HouseNone {
+		return fmt.Sprintf("%s %s %s", e.who(), e.House, e.typeNoun())
+	}
+	return fmt.Sprintf("%s %s", e.who(), e.typeNoun())
+}
+
+// CountText renders the singular noun the "for each" clause repeats. A
+// house-filtered count reads "friendly Mars creature"; an unfiltered one adds "in
+// play" to distinguish it from cards in hand.
+func (e InPlay) CountText() string {
+	if e.House != HouseNone {
+		return e.noun()
+	}
+	return e.noun() + " in play"
+}
+
+// CondText renders the condition, e.g. "if there is a friendly creature in play"
+// or "if there are 2 friendly creatures in play".
+func (e InPlay) CondText() string {
+	if n := e.threshold(); n > 1 {
+		return fmt.Sprintf("if there are %d %ss in play", n, e.noun())
+	}
+	return fmt.Sprintf("if there is a %s in play", e.noun())
+}

@@ -10,7 +10,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Traits: Item
 //
 //	Versatile.
-//	Action: Destroy Gorm of Omm, and destroy an artifact.
+//	Action: Destroy Gorm of Omm and an artifact.
 var GormOfOmm = card.New(
 	"Gorm of Omm",
 	card.House.Sanctum,

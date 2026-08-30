@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Brobnar</title>
+  <g fill="#e08a3c" stroke="#e08a3c" stroke-linejoin="round">
+    <rect x="4" y="3" width="12" height="6" rx="1.2"/>
+    <rect x="8.5" y="8" width="3" height="13" rx="1.4"/>
+  </g>
+</svg>

@@ -18,7 +18,10 @@ var EffervescentPrinciple = card.New(
 	card.WithAbility(
 		card.Trigger.Play, card.Sequence{
 			Effects: []card.Effect{
-				card.EachPlayerLosesHalfAember{},
+				card.LoseAember{
+					Player: card.EachPlayer,
+					By:     card.Half,
+				},
 				card.GainChains{Amount: 1},
 			},
 		}),

@@ -2,6 +2,26 @@ package engine
 
 import "testing"
 
+func TestNextCreaturePlayed(t *testing.T) {
+	e := NextCreaturePlayed{Of: Mars, EntersPlay: Ready{Target: Target{Kind: TargetTriggeringCreature}}}
+	if e.Text() != "the next Mars creature you play this turn enters play ready" {
+		t.Errorf("text = %q", e.Text())
+	}
+	if e.validate() != nil {
+		t.Errorf("a Ready EntersPlay should validate, got %v", e.validate())
+	}
+	g := NewGame("A", "B", 1)
+	e.Resolve(&EffectContext{Resolver: g, Controller: 0})
+	if le := g.State.Lasting[0]; g.State.LastingCount != 1 || le.Do != actReadyPlayed || le.House != Mars || !le.Once {
+		t.Errorf("resolve should register a one-shot Mars ready reaction; got %+v (count %d)", le, g.State.LastingCount)
+	}
+
+	// An EntersPlay effect the flat registry cannot carry is rejected.
+	if (NextCreaturePlayed{Of: Mars, EntersPlay: GainAember{Player: Controller, Amount: 1}}).validate() == nil {
+		t.Error("an unsupported EntersPlay effect should be rejected")
+	}
+}
+
 func TestForRemainderOfTurnText(t *testing.T) {
 	cases := []struct {
 		e    ForRemainderOfTurn

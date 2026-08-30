@@ -80,6 +80,9 @@ type Restrictions struct {
 	// "your opponent cannot play more than 2 cards each turn"). Its zero value
 	// imposes no limit.
 	PlayCardLimit PlayCardLimit
+	// Toll is Æmber the controller's opponent must pay the controller to play or
+	// use an artifact (Customs Office, Tentacus). Its zero value imposes no toll.
+	Toll Toll
 }
 
 // PlayCardLimit caps how many cards Player may play in a turn while its source
@@ -299,11 +302,12 @@ func WithFightRestriction(t Target) CardOption {
 	return func(c *CardDefinition) { c.FightRestriction = t }
 }
 
-// WithEntersStunned makes a creature enter play stunned (Chuff Ape) by giving it
-// an Enters Play ability that stuns itself — an ability the enter-play event
-// fires, so the play path needs no special case for it.
-func WithEntersStunned() CardOption {
-	return WithAbility(TriggerEntersPlay, Stun{Target: Target{Kind: TargetThisCreature}})
+// WithEntersPlay makes a creature apply an effect to itself as it enters play
+// (Chuff Ape stunning itself with Stun) by giving it that effect as an Enters Play
+// ability — an ability the enter-play event fires, so the play path needs no
+// special case for it.
+func WithEntersPlay(e Effect) CardOption {
+	return WithAbility(TriggerEntersPlay, e)
 }
 
 // WithAemberBonus sets the number of Æmber pips on the card.

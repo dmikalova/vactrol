@@ -67,6 +67,11 @@ func (b bridgeChooser) ChooseOption(source, prompt string, options []string) int
 	if len(options) <= 1 {
 		return 0
 	}
+	// Forging always asks which key colour to forge; the harness answers it
+	// automatically (first colour) so it never interrupts a card test.
+	if prompt == engine.KeyColorPrompt {
+		return 0
+	}
 	reply := make(chan int)
 	b.h.prompt <- promptReq{
 		player:   b.player,

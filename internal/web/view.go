@@ -27,6 +27,7 @@ func (g *game) Render() app.UI {
 			g.controls(),
 		),
 		app.If(g.zonesPlayer >= 0, func() app.UI { return g.zonesOverlay() }),
+		app.If(g.pickerOpen, func() app.UI { return g.cardPicker() }),
 		app.If(g.phase == phaseOver, func() app.UI { return g.overBanner() }),
 	)
 }
@@ -43,6 +44,10 @@ func (g *game) brandBar() app.UI {
 			return app.Span().Class("badge-error").Text(g.status)
 		}),
 		app.Div().Class("spacer"),
+		app.Button().Class(cx("btn-nav", ifCls(g.g.Manual(), "btn-nav-on"))).
+			Text("Manual").
+			Disabled(g.busy || g.choosing || g.choosingOption).
+			OnClick(g.toggleManual),
 		app.Button().Class("btn-nav").Text("New game").
 			Disabled(g.busy || g.choosing || g.choosingOption).
 			OnClick(g.restart),
@@ -78,15 +83,19 @@ func (g *game) boardArea() []app.UI {
 
 func (g *game) scorePill(player int) app.UI {
 	active := player == g.active()
-	parts := []string{
-		fmt.Sprintf("%d Æmber", g.g.Aember(player)),
-		fmt.Sprintf("%d/%d keys", g.g.Keys(player), engine.KeysToWin),
+	detail := []app.UI{
+		app.Span().Class("stat-seg").Body(
+			app.Text(strconv.Itoa(g.g.Aember(player))),
+			icon("aember", "icon-stat"),
+		),
+		app.Text(" • "),
+		g.keysDisplay(player),
 	}
-	detail := []app.UI{app.Text(strings.Join(parts, " • "))}
 	if active && g.g.State.ActiveHouse != engine.HouseNone {
 		h := g.g.State.ActiveHouse
 		detail = append(detail,
-			app.Text(" • house "),
+			app.Text(" • "),
+			houseIcon(h, "icon-inline"),
 			app.Span().Class(cx("score-house", houseAccent(h))).Text(h.String()),
 		)
 	}
@@ -102,6 +111,26 @@ func (g *game) scorePill(player int) app.UI {
 			app.Span().Class("score-detail").Body(detail...),
 			app.Span().Class("score-zones").Text(zones),
 		)
+}
+
+// keysDisplay shows a player's three key slots: a coloured key icon for each key
+// forged (in forge order), and a dimmed key for each still to forge.
+func (g *game) keysDisplay(player int) app.UI {
+	colors := g.g.KeyColors(player)
+	slots := make([]app.UI, 0, engine.KeysToWin)
+	for _, c := range colors {
+		// A forged key with no recorded colour (e.g. a legacy snapshot) still counts,
+		// so show the neutral key rather than a broken image from an empty icon name.
+		if name := keyColorIconName(c); name != "" {
+			slots = append(slots, icon(name, "icon-stat"))
+		} else {
+			slots = append(slots, icon("key", "icon-stat"))
+		}
+	}
+	for i := len(colors); i < engine.KeysToWin; i++ {
+		slots = append(slots, icon("key", "icon-stat", "key-unforged"))
+	}
+	return app.Span().Class("score-keys").Body(slots...)
 }
 
 func (g *game) renderRow(label string, ids []engine.LocalID, boardKind selKind) app.UI {
@@ -126,9 +155,12 @@ func (g *game) renderCard(id engine.LocalID, boardKind selKind) app.UI {
 		ID:         id,
 		Title:      def.Name,
 		HouseCls:   houseClasses(def.House),
+		Emblem:     houseIconName(def.House),
+		TypeIcon:   typeIconName(def.Type),
 		Stat:       g.statLine(id),
 		Rules:      g.faceRules(id),
 		Kind:       string(def.Type),
+		Stunned:    g.g.Stunned(id),
 		Selected:   g.hasSel && g.sel == id,
 		Targetable: targetable,
 		Dimmed:     dimmed,
@@ -142,7 +174,8 @@ func (g *game) renderCard(id engine.LocalID, boardKind selKind) app.UI {
 // lowlighted (dimmed) as an invalid choice. During a chooser or fight-target
 // prompt only the eligible cards are highlighted and the rest dimmed; in ordinary
 // play, cards the active player cannot act with (wrong house, exhausted, or
-// unplayable from hand) are dimmed so the usable ones stand out.
+// unplayable from hand) and the opponent's read-only cards are dimmed so the
+// usable ones stand out.
 func (g *game) cardVisual(id engine.LocalID, kind selKind) (activate func(app.Context, engine.LocalID), targetable, dimmed bool) {
 	switch {
 	case g.choosing:
@@ -160,11 +193,13 @@ func (g *game) cardVisual(id engine.LocalID, kind selKind) (activate func(app.Co
 		}
 		return nil, false, true
 	case kind == selHand:
-		return g.selectHandID, false, !g.playableFromHand(g.g.Def(id))
+		return g.selectHandID, false, !g.playableFromHand(id)
 	case kind == selYourCreature, kind == selYourArtifact:
 		return g.selectBoardID, false, !g.actionable(id, kind)
 	default:
-		return g.selectBoardID, false, false
+		// Opponent's cards are read-only in ordinary play: dimmed like the active
+		// player's non-actionable cards, but still clickable to inspect.
+		return g.selectBoardID, false, true
 	}
 }
 
@@ -229,11 +264,13 @@ func (g *game) renderHandCard(id engine.LocalID) app.UI {
 	def := g.g.Def(id)
 	activate, targetable, dimmed := g.cardVisual(id, selHand)
 	draggable := !g.busy && !g.choosing && !g.choosingOption &&
-		g.phase == phaseMain && g.playableFromHand(def)
+		g.phase == phaseMain && g.playableFromHand(id)
 	return &cardView{
 		ID:          id,
 		Title:       def.Name,
 		HouseCls:    houseClasses(def.House),
+		Emblem:      houseIconName(def.House),
+		TypeIcon:    typeIconName(def.Type),
 		Stat:        handStat(def),
 		Rules:       engine.RenderCardRules(def),
 		Kind:        string(def.Type),
@@ -266,6 +303,9 @@ func (g *game) controls() app.UI {
 		)
 	}
 	if g.phase == phaseHouse {
+		if g.g.Manual() {
+			return app.Div().Class("controls").Body(g.manualPanel(), g.housePicker())
+		}
 		return app.Div().Class("controls").Body(g.housePicker())
 	}
 	// Mid-action selections (choosing a flank or a fight target) show only their
@@ -273,9 +313,96 @@ func (g *game) controls() app.UI {
 	if g.phase == phaseFlank || g.phase == phaseFightTarget {
 		return app.Div().Class("controls").Body(g.actionBar())
 	}
+	// In sandbox mode the manual controls sit above the normal action bar, which
+	// still works (house restrictions lifted) so cards can be used out of house.
+	if g.g.Manual() {
+		return app.Div().Class("controls").Body(
+			g.manualPanel(),
+			g.actionBar(),
+			btn("End turn", g.endTurn, "btn-secondary"),
+		)
+	}
 	return app.Div().Class("controls").Body(
 		g.actionBar(),
 		btn("End turn", g.endTurn, "btn-secondary"),
+	)
+}
+
+// manualPanel is the sandbox control block: add an arbitrary card, and (for a
+// selected card) ready/exhaust it and move it between zones.
+func (g *game) manualPanel() app.UI {
+	items := []app.UI{
+		app.Div().Class("section-title").Text("Manual"),
+		btn("Add card…", g.openPicker, "btn-secondary"),
+	}
+	if g.hasSel {
+		name := g.g.Def(g.sel).Name
+		if g.isInPlay(g.sel) {
+			if g.g.Exhausted(g.sel) {
+				items = append(items, btn("Ready "+name, g.manualReady, "btn-secondary"))
+			} else {
+				items = append(items, btn("Exhaust "+name, g.manualExhaust, "btn-secondary"))
+			}
+		}
+		items = append(items,
+			app.Div().Class("hint").Text("Move "+name+" to:"),
+			g.moveButtons(),
+		)
+	}
+	return app.Div().Class("btn-col manual-panel").Body(items...)
+}
+
+// moveButtons is the row of destination buttons for manually relocating the
+// selected card.
+func (g *game) moveButtons() app.UI {
+	dests := []struct {
+		label string
+		dest  engine.ManualZone
+	}{
+		{"Hand", engine.ManualHand},
+		{"Deck top", engine.ManualDeckTop},
+		{"Deck bottom", engine.ManualDeckBottom},
+		{"Discard", engine.ManualDiscard},
+		{"Archives", engine.ManualArchives},
+		{"Purge", engine.ManualPurge},
+	}
+	buttons := make([]app.UI, len(dests))
+	for i, d := range dests {
+		buttons[i] = btn(d.label, g.manualMove(d.dest), "btn-mini")
+	}
+	return app.Div().Class("btn-wrap").Body(buttons...)
+}
+
+// cardPicker is the fuzzy, text-only card picker for adding an arbitrary card
+// from the pool to hand. It filters the pool by a case-insensitive name substring.
+func (g *game) cardPicker() app.UI {
+	q := strings.ToLower(strings.TrimSpace(g.pickerQuery))
+	var matches []engine.CardDefinition
+	for _, d := range g.allDefs {
+		if q == "" || strings.Contains(strings.ToLower(d.Name), q) {
+			matches = append(matches, d)
+			if len(matches) >= 50 {
+				break
+			}
+		}
+	}
+	return app.Div().Class("over-backdrop").OnClick(g.closePicker).Body(
+		app.Div().Class("picker-panel").OnClick(g.stopClick).Body(
+			app.Button().Class("zones-close").Text("✕").OnClick(g.closePicker),
+			app.Div().Class("over-title").Text("Add a card to hand"),
+			app.Input().Class("picker-input").Type("text").Placeholder("Search cards…").
+				AutoFocus(true).Value(g.pickerQuery).OnInput(g.pickerInput),
+			app.Div().Class("picker-list").Body(
+				app.Range(matches).Slice(func(i int) app.UI {
+					d := matches[i]
+					return app.Button().Class("picker-item").OnClick(g.addPickedCard(d)).Body(
+						houseIcon(d.House, "icon-inline"),
+						app.Span().Class("picker-name").Text(d.Name),
+						app.Span().Class("picker-kind").Text(string(d.Type)),
+					)
+				}),
+			),
+		),
 	)
 }
 
@@ -287,16 +414,28 @@ func (g *game) housePicker() app.UI {
 			h := houses[i]
 			return app.Button().
 				Class(cx("house-btn", houseAccent(h))).
-				Text(h.String()).
-				OnClick(g.pickHouse(h))
+				OnClick(g.pickHouse(h)).
+				Body(houseIcon(h, "icon-inline"), app.Text(h.String()))
 		}),
 	)
 }
 
 // optionChooser renders a labeled multiple-choice prompt. When every option is a
-// house (a "choose a house" effect such as Blinding Light) it shows colored house
-// buttons like the start-of-turn picker; otherwise plain primary buttons.
+// house or a key colour, it shows themed icon buttons; otherwise plain primary
+// buttons.
 func (g *game) optionChooser() app.UI {
+	if g.keyColorOptions() {
+		return app.Div().Class("btn-col").Body(
+			app.Div().Class("section-title").Text("Choose a key colour:"),
+			app.Range(g.optionLabels).Slice(func(i int) app.UI {
+				c := keyColorByName(g.optionLabels[i])
+				return app.Button().
+					Class("house-btn").
+					OnClick(g.chooseOptionIdx(i)).
+					Body(icon(keyColorIconName(c), "icon-inline"), app.Text(g.optionLabels[i]))
+			}),
+		)
+	}
 	if g.houseOptions() {
 		return app.Div().Class("btn-col").Body(
 			app.Div().Class("section-title").Text("Choose a house:"),
@@ -304,8 +443,8 @@ func (g *game) optionChooser() app.UI {
 				h, _ := engine.ParseHouse(g.optionLabels[i])
 				return app.Button().
 					Class(cx("house-btn", houseAccent(h))).
-					Text(g.optionLabels[i]).
-					OnClick(g.chooseOptionIdx(i))
+					OnClick(g.chooseOptionIdx(i)).
+					Body(houseIcon(h, "icon-inline"), app.Text(g.optionLabels[i]))
 			}),
 		)
 	}
@@ -325,6 +464,20 @@ func (g *game) houseOptions() bool {
 	}
 	for _, label := range g.optionLabels {
 		if _, ok := engine.ParseHouse(label); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// keyColorOptions reports whether every current option label names a key colour,
+// so the forge prompt can be shown as coloured key buttons.
+func (g *game) keyColorOptions() bool {
+	if len(g.optionLabels) == 0 {
+		return false
+	}
+	for _, label := range g.optionLabels {
+		if keyColorByName(label) == engine.KeyColorNone {
 			return false
 		}
 	}
@@ -363,21 +516,17 @@ func (g *game) actionBar() app.UI {
 
 func (g *game) handActions() app.UI {
 	def := g.g.Def(g.sel)
-	if h := g.g.State.ActiveHouse; h != engine.HouseNone && def.House != h {
-		return app.Div().Class("hint").Text("Not the active house — you cannot play this from hand.")
+	items := []app.UI{app.Div().Class("section-title").Text(def.Name)}
+	if err := g.g.CanPlay(g.active(), g.sel); err != nil {
+		items = append(items, app.Div().Class("hint").Text("Cannot play: "+err.Error()+"."))
+	} else {
+		items = append(items, btn("Play", g.play, "btn-primary"))
 	}
-	if def.Type == engine.Upgrade && !g.anyCreatureInPlay() {
-		return app.Div().Class("btn-col").Body(
-			app.Div().Class("section-title").Text(def.Name),
-			app.Div().Class("hint").Text("No creature in play to attach this upgrade to."),
-			btn("Discard", g.discard, "btn-danger"),
-		)
+	// Discarding needs only that the card is of the active house.
+	if h := g.g.State.ActiveHouse; h == engine.HouseNone || def.House == h {
+		items = append(items, btn("Discard", g.discard, "btn-danger"))
 	}
-	return app.Div().Class("btn-col").Body(
-		app.Div().Class("section-title").Text(def.Name),
-		btn("Play", g.play, "btn-primary"),
-		btn("Discard", g.discard, "btn-danger"),
-	)
+	return app.Div().Class("btn-col").Body(items...)
 }
 
 func (g *game) creatureActions() app.UI {
@@ -387,14 +536,23 @@ func (g *game) creatureActions() app.UI {
 			app.Div().Class("hint").Text("Cannot act: "+err.Error()+"."),
 		)
 	}
+	// A stunned creature recovers from stun instead of acting, so any use just
+	// removes the stun: offer a single Unstun rather than Reap/Fight/Action.
+	if g.g.Stunned(g.sel) {
+		return app.Div().Class("btn-col").Body(
+			app.Div().Class("section-title").Text(g.g.Def(g.sel).Name),
+			app.Div().Class("hint").Text("Stunned"),
+			btn("Unstun", g.reap, "btn-primary"),
+		)
+	}
 	items := []app.UI{
 		app.Div().Class("section-title").Text(g.g.Def(g.sel).Name),
-		btn("Reap", g.reap, "btn-primary"),
+		btn("Reap", g.reap, "btn-warning"),
 	}
 	// Fight is offered only when a legal target exists (e.g. with no enemy
 	// creatures, a ready Valdr can still reap but has nothing to fight).
 	if len(g.g.FightTargets(g.active(), g.sel)) > 0 {
-		items = append(items, btn("Fight", g.startFight, "btn-primary"))
+		items = append(items, btn("Fight", g.startFight, "btn-danger"))
 	}
 	if g.g.HasAction(g.sel) {
 		items = append(items, btn("Action", g.useAction, "btn-primary"))
@@ -425,7 +583,17 @@ func (g *game) detailPanel() app.UI {
 	case g.hasSel:
 		body = append(body, app.Div().Class("detail-text").Text(engine.RenderCardText(g.g.Def(g.sel))))
 		if a := g.g.AmberOn(g.sel); a > 0 {
-			body = append(body, app.Div().Class("detail-amber").Text(fmt.Sprintf("Captured Æmber: %d", a)))
+			body = append(body, app.Div().Class("detail-amber").Body(
+				app.Text("Captured "),
+				icon("aember", "icon-inline"),
+				app.Text(" "+strconv.Itoa(a)),
+			))
+		}
+		if g.g.Stunned(g.sel) {
+			body = append(body, app.Div().Class("detail-status").Body(
+				icon("stun", "icon-inline"),
+				app.Text(" Stunned"),
+			))
 		}
 		// Show attached upgrades so their effect is visible from the creature they
 		// are on (upgrades are not separately clickable).
@@ -474,6 +642,13 @@ func (g *game) logSegments(line string) []app.UI {
 				OnClick(g.onLogCardClick).
 				Text(name))
 			i += len(name)
+			continue
+		}
+		// Put the Æmber icon before the word wherever the log mentions it.
+		if strings.HasPrefix(line[i:], "Æmber") {
+			flush()
+			out = append(out, icon("aember", "icon-inline"), app.Text("Æmber"))
+			i += len("Æmber")
 			continue
 		}
 		plain.WriteByte(line[i])
@@ -526,8 +701,10 @@ func (g *game) zonesOverlay() app.UI {
 	p := g.zonesPlayer
 	return app.Div().Class("over-backdrop").OnClick(g.closeZones).Body(
 		app.Div().Class("zones-panel").OnClick(g.stopClick).Body(
-			app.Button().Class("zones-close").Text("✕").OnClick(g.closeZones),
-			app.Div().Class("over-title").Text(g.g.PlayerName(p)+"'s Zones"),
+			app.Div().Class("zones-header").Body(
+				app.Button().Class("zones-close").Text("✕").OnClick(g.closeZones),
+				app.Div().Class("over-title").Text(g.g.PlayerName(p)+"'s Zones"),
+			),
 			g.zoneRow("Deck", g.sortByHouseTypeName(g.g.Deck(p))),
 			g.zoneRow("Discard", g.g.Discard(p)),
 			g.zoneRow("Archives", g.g.Archives(p)),
@@ -552,13 +729,21 @@ func (g *game) zoneRow(label string, ids []engine.LocalID) app.UI {
 // renderZoneCard renders a read-only card face for a card in an out-of-play zone.
 func (g *game) renderZoneCard(id engine.LocalID) app.UI {
 	def := g.g.Def(id)
+	// In manual mode a zone card can be selected to move it (e.g. deck → hand).
+	var activate func(app.Context, engine.LocalID)
+	if g.g.Manual() {
+		activate = g.selectZoneCard
+	}
 	return &cardView{
-		ID:       id,
-		Title:    def.Name,
-		HouseCls: houseClasses(def.House),
-		Stat:     handStat(def),
-		Rules:    engine.RenderCardRules(def),
-		Kind:     string(def.Type),
+		ID:         id,
+		Title:      def.Name,
+		HouseCls:   houseClasses(def.House),
+		Emblem:     houseIconName(def.House),
+		TypeIcon:   typeIconName(def.Type),
+		Stat:       handStat(def),
+		Rules:      engine.RenderCardRules(def),
+		Kind:       string(def.Type),
+		OnActivate: activate,
 	}
 }
 
@@ -568,39 +753,40 @@ func btn(label string, h app.EventHandler, class string) app.UI {
 	return app.Button().Class(class).Text(label).OnClick(h)
 }
 
-func (g *game) statLine(id engine.LocalID) string {
+func (g *game) statLine(id engine.LocalID) []app.UI {
 	def := g.g.Def(id)
-	var parts []string
+	var segs []app.UI
 	if def.Type == engine.Creature {
-		parts = append(parts, fmt.Sprintf("%d power", g.g.Power(id)))
+		segs = append(segs, statSeg(g.g.Power(id), "power"))
 		if d := g.g.Damage(id); d > 0 {
-			parts = append(parts, fmt.Sprintf("%d dmg", d))
+			segs = append(segs, statSeg(d, "damage"))
 		}
 		if a := g.g.Armor(id); a > 0 {
-			parts = append(parts, fmt.Sprintf("%d armor", a))
+			segs = append(segs, statSeg(a, "shield"))
 		}
 	}
 	if a := g.g.AmberOn(id); a > 0 {
-		parts = append(parts, fmt.Sprintf("%d Æ", a))
+		segs = append(segs, statSeg(a, "aember"))
 	}
+	// Stun shows as a token on the face (see cardView); exhaustion stays a tag here.
 	if g.g.Exhausted(id) {
-		parts = append(parts, "exhausted")
+		segs = append(segs, app.Span().Class("stat-tag").Text("exhausted"))
 	}
-	return strings.Join(parts, " • ")
+	return segs
 }
 
-func handStat(def *engine.CardDefinition) string {
-	var parts []string
+func handStat(def *engine.CardDefinition) []app.UI {
+	var segs []app.UI
 	if def.Type == engine.Creature {
-		parts = append(parts, fmt.Sprintf("%d power", def.Power))
+		segs = append(segs, statSeg(def.Power, "power"))
 		if def.Armor > 0 {
-			parts = append(parts, fmt.Sprintf("%d armor", def.Armor))
+			segs = append(segs, statSeg(def.Armor, "shield"))
 		}
 	}
 	if def.AemberBonus > 0 {
-		parts = append(parts, fmt.Sprintf("+%d Æ", def.AemberBonus))
+		segs = append(segs, statSeg(def.AemberBonus, "aember"))
 	}
-	return strings.Join(parts, " • ")
+	return segs
 }
 
 func (g *game) faceRules(id engine.LocalID) string {
@@ -614,22 +800,10 @@ func (g *game) faceRules(id engine.LocalID) string {
 	return strings.Join(lines, "\n")
 }
 
-func (g *game) playableFromHand(def *engine.CardDefinition) bool {
-	h := g.g.State.ActiveHouse
-	if h != engine.HouseNone && def.House != h {
-		return false
-	}
-	if def.Type == engine.Upgrade && !g.anyCreatureInPlay() {
-		return false
-	}
-	return true
-}
-
-// anyCreatureInPlay reports whether either battleline holds a creature. An
-// upgrade attaches to a creature (on either side), so it cannot be played into an
-// empty board.
-func (g *game) anyCreatureInPlay() bool {
-	return len(g.g.Battleline(0)) > 0 || len(g.g.Battleline(1)) > 0
+// playableFromHand reports whether the active player can play the given hand card
+// right now, so unplayable cards are dimmed and not draggable.
+func (g *game) playableFromHand(id engine.LocalID) bool {
+	return g.g.CanPlay(g.active(), id) == nil
 }
 
 func (g *game) isEnemyCreature(id engine.LocalID) bool {

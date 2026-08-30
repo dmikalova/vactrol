@@ -14,6 +14,14 @@ type Exhaust struct {
 	Target Target
 }
 
+// validate requires an explicit target.
+func (e Exhaust) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("Exhaust")
+	}
+	return nil
+}
+
 func (e Exhaust) verb() string       { return "exhaust" }
 func (e Exhaust) targetText() string { return e.Target.Text() }
 
@@ -24,5 +32,34 @@ func (e Exhaust) Text() string { return e.verb() + " " + e.targetText() }
 func (e Exhaust) Resolve(ctx *EffectContext) {
 	for _, id := range e.Target.Select(ctx) {
 		ctx.Resolver.SetExhausted(id, true)
+	}
+}
+
+// Readying a creature turns it upright again so it can be used, the opposite of
+// exhausting. It readies each creature the effect targets.
+//
+//rulebook:effect Ready
+type Ready struct {
+	Target Target
+}
+
+// validate requires an explicit target.
+func (e Ready) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("Ready")
+	}
+	return nil
+}
+
+func (e Ready) verb() string       { return "ready" }
+func (e Ready) targetText() string { return e.Target.Text() }
+
+// Text renders the effect, e.g. "ready this creature".
+func (e Ready) Text() string { return e.verb() + " " + e.targetText() }
+
+// Resolve readies each selected creature.
+func (e Ready) Resolve(ctx *EffectContext) {
+	for _, id := range e.Target.Select(ctx) {
+		ctx.Resolver.SetExhausted(id, false)
 	}
 }

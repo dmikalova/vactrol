@@ -2,6 +2,53 @@ package engine
 
 import "testing"
 
+func TestCanPlay(t *testing.T) {
+	g := started(t) // player 0 active, Brobnar
+	creat := g.AddToHand(testCreature("c", 3), 0)
+	if err := g.CanPlay(0, creat); err != nil {
+		t.Errorf("playable creature = %v, want nil", err)
+	}
+	if err := g.CanPlay(1, creat); err != ErrNotActivePlayer {
+		t.Errorf("wrong player = %v, want ErrNotActivePlayer", err)
+	}
+
+	off := g.AddToHand(NewCard("off", Sanctum, Creature, Common, WithPower(1)), 0)
+	if err := g.CanPlay(0, off); err != ErrWrongHouse {
+		t.Errorf("off-house = %v, want ErrWrongHouse", err)
+	}
+
+	up := g.AddToHand(NewCard("up", Brobnar, Upgrade, Common), 0)
+	if err := g.CanPlay(0, up); err != ErrNoTarget {
+		t.Errorf("hostless upgrade = %v, want ErrNoTarget", err)
+	}
+
+	g.State.Winner = 1
+	if err := g.CanPlay(0, creat); err != ErrGameOver {
+		t.Errorf("game over = %v, want ErrGameOver", err)
+	}
+}
+
+func TestCanPlayRestrictions(t *testing.T) {
+	// Creatures barred: a card that stops the player playing creatures.
+	g := started(t)
+	g.AddToBattleline(NewCard("Blocker", Brobnar, Creature, Common, WithPower(1),
+		WithRestrictions(Restrictions{CannotPlay: Creature})), 0)
+	c := g.AddToHand(testCreature("c", 3), 0)
+	if err := g.CanPlay(0, c); err != ErrCannotPlayCreature {
+		t.Errorf("creatures barred = %v, want ErrCannotPlayCreature", err)
+	}
+
+	// Card-play limit reached this turn.
+	g2 := started(t)
+	g2.AddToBattleline(NewCard("Imp", Brobnar, Creature, Common, WithPower(1),
+		WithRestrictions(Restrictions{PlayCardLimit: PlayCardLimit{Player: Controller, Amount: 2}})), 0)
+	g2.State.CardsPlayedThisTurn[0] = 2
+	c2 := g2.AddToHand(testCreature("c2", 3), 0)
+	if err := g2.CanPlay(0, c2); err != ErrCardPlayLimit {
+		t.Errorf("limit reached = %v, want ErrCardPlayLimit", err)
+	}
+}
+
 func TestCardPlayLimit(t *testing.T) {
 	g := started(t) // player 0 active, Brobnar
 	// Player 1 controls an Ember-Imp-like card limiting player 0 to two plays.

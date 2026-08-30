@@ -18,5 +18,8 @@ var DoorstepToHeaven = card.New(
 	card.Provenance(card.CotA, 217),
 	card.WithAemberBonus(1),
 	card.WithAbility(
-		card.Trigger.Play, card.EachPlayerLosesAllBut{Keep: 5}),
+		card.Trigger.Play, card.LoseAember{
+			Player: card.EachPlayer,
+			By:     card.AllBut(5),
+		}),
 )

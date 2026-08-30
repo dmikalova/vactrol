@@ -107,6 +107,11 @@ type GameState struct {
 	Aember [2]int
 	Keys   [2]int
 
+	// KeyColors[p] holds the colour of each key player p has forged, in forge order;
+	// entries [0:Keys[p]] are set, the rest are KeyColorNone. A player picks the
+	// colour as they forge (see chooseKeyColor).
+	KeyColors [2][KeysToWin]KeyColor
+
 	// Chains[p] is player p's chain count. Chains penalize a player by reducing how
 	// many cards they draw at the end of their turn — one fewer card for every 6
 	// chains — and a player sheds a single chain on a turn where that reduction
@@ -150,6 +155,12 @@ type GameState struct {
 	// their own next turn. HouseNone means no house is forced.
 	ForcedHouse     [2]House
 	ForcedHouseNext [2]House
+
+	// FightDamageRedirect is the creature a "Before Fight" ability chose to receive
+	// the attacker's fight damage instead of the defender (Gabos Longarms). It is
+	// set during the fight in progress and read and cleared by the combat step; 0
+	// means the attacker's fight damage hits the creature it is fighting as usual.
+	FightDamageRedirect LocalID
 }
 
 // FastCopy returns an independent copy of the state. Because every field is a

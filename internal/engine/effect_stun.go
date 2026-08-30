@@ -16,6 +16,14 @@ type Stun struct {
 	Target Target
 }
 
+// validate requires an explicit target.
+func (e Stun) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("Stun")
+	}
+	return nil
+}
+
 func (e Stun) verb() string       { return "stun" }
 func (e Stun) targetText() string { return e.Target.Text() }
 
@@ -35,6 +43,14 @@ func (e Stun) Resolve(ctx *EffectContext) {
 //rulebook:effect Unstun
 type Unstun struct {
 	Target Target
+}
+
+// validate requires an explicit target.
+func (e Unstun) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("Unstun")
+	}
+	return nil
 }
 
 func (e Unstun) verb() string       { return "unstun" }

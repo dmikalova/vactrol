@@ -18,7 +18,7 @@ import (
 //	Traits: Robot
 //
 //	Your opponent's keys cost +1 Æmber.
-//	Fight/Reap: Grabber Jammer captures 1 Æmber.
+//	Fight/Reap: Grabber Jammer captures 1 Æmber from your opponent.
 func TestGrabberJammer(t *testing.T) {
 	t.Run("captures 1 Æmber when it fights or reaps", func(t *testing.T) {
 		var jammer ct.Card

@@ -10,7 +10,7 @@ import "github.com/dmikalova/vactrol/internal/card"
 //	Power:  3
 //	Traits: Human • Scientist
 //
-//	Play: Dextre captures 1 Æmber.
+//	Play: Dextre captures 1 Æmber from your opponent.
 //	Destroyed: Put Dextre on top of its owner's deck.
 var Dextre = card.New(
 	"Dextre",
@@ -21,7 +21,14 @@ var Dextre = card.New(
 	card.WithPower(3),
 	card.WithTraits("Human", "Scientist"),
 	card.WithAbility(
-		card.Trigger.Play, card.CaptureAember{Amount: 1}),
+		card.Trigger.Play, card.CaptureAember{
+			Amount: 1,
+			Target: card.Target.This,
+			Source: card.Opponent,
+		}),
 	card.WithAbility(
-		card.Trigger.Destroyed, card.MoveFromPlay{Target: card.Target.This, Destination: card.To.TopOfDeck}),
+		card.Trigger.Destroyed, card.MoveFromPlay{
+			Target:      card.Target.This,
+			Destination: card.To.TopOfDeck,
+		}),
 )

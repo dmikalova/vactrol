@@ -10,6 +10,14 @@ type AddPowerCounter struct {
 	Amount int
 }
 
+// validate requires an explicit target.
+func (e AddPowerCounter) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("AddPowerCounter")
+	}
+	return nil
+}
+
 // Text renders the effect, e.g. "give Eater of the Dead a +1 power counter".
 func (e AddPowerCounter) Text() string {
 	return fmt.Sprintf("give %s a %+d power counter", e.Target.Text(), e.Amount)

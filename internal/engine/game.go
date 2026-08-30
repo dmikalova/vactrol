@@ -71,6 +71,15 @@ type Game struct {
 	choosers [2]Chooser
 	cat      *catalog
 	rng      *rand.Rand
+	// houses[p] is the set of houses in player p's deck — the houses they may choose
+	// as their active house. Empty means unknown, in which case any house is allowed
+	// (so tests and the AI need not declare deck houses). A frontend sets it so a
+	// forced house (Control the Weak) that the player lacks is ignored: cannot
+	// overrides must.
+	houses [2][]House
+	// manual turns on sandbox mode: house restrictions on playing and using cards
+	// are lifted so a UI can rearrange the game freely. See game_manual.go.
+	manual bool
 }
 
 // NewGame creates a new two-player game seeded for deterministic play.
@@ -87,6 +96,13 @@ func NewGame(p0Name, p1Name string, seed int64) *Game {
 
 // SetChooser installs a custom chooser for a player (nil resets to the default).
 func (g *Game) SetChooser(player int, c Chooser) { g.choosers[player] = c }
+
+// SetPlayerHouses records the houses in a player's deck — the houses they may
+// choose from. A frontend sets it so a forced active house the player does not
+// have is ignored (cannot overrides must). When unset, any house is allowed.
+func (g *Game) SetPlayerHouses(player int, houses []House) {
+	g.houses[player] = append([]House(nil), houses...)
+}
 
 // PlayerName returns a player's display name.
 func (g *Game) PlayerName(player int) string { return g.names[player] }

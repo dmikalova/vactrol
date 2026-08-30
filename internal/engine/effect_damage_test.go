@@ -11,7 +11,7 @@ func TestDealDamagePerCount(t *testing.T) {
 	victim := g.AddToBattleline(testCreature("victim", 10), 1)
 	ctx := &EffectContext{Resolver: g, Controller: 0}
 
-	e := DealDamage{Amount: 1, Per: FriendlyCreaturesInPlay{}, Target: Target{Kind: TargetEachEnemyCreature}}
+	e := DealDamage{Amount: 1, Per: InPlay{Player: Controller, Type: Creature}, Target: Target{Kind: TargetEachEnemyCreature}}
 	if e.Text() != "for each friendly creature in play, deal 1 damage to each enemy creature" {
 		t.Errorf("text = %q", e.Text())
 	}

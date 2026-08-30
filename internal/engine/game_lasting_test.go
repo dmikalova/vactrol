@@ -23,6 +23,20 @@ func TestFireLastingOrders(t *testing.T) {
 	}
 }
 
+func TestLastingOnceExpiresAtEndOfTurn(t *testing.T) {
+	g := started(t)
+	g.AddLastingOnce(EventCreaturePlayed, actReadyPlayed, 0, 0, Mars)
+	if g.State.LastingCount != 1 {
+		t.Fatalf("setup: lasting count = %d, want 1", g.State.LastingCount)
+	}
+
+	g.EndTurn(0)
+
+	if g.State.LastingCount != 0 {
+		t.Errorf("a one-shot reaction that never fired should be cleared at end of turn, count = %d", g.State.LastingCount)
+	}
+}
+
 func TestClearLastingKeepsOtherPlayer(t *testing.T) {
 	g := started(t)
 	g.AddLasting(EventCreaturePlayed, actGainAember, 0, 1)
@@ -45,5 +59,57 @@ func TestAddLastingCap(t *testing.T) {
 	}
 	if int(g.State.LastingCount) != maxLasting {
 		t.Errorf("lasting count = %d, want %d (capped)", g.State.LastingCount, maxLasting)
+	}
+}
+
+func TestLastingOnceReadiesMatchingHouseAndSelfRemoves(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	mars := g.AddToBattleline(NewCard("m", Mars, Creature, Common, WithPower(2)), 0)
+	sanc := g.AddToBattleline(NewCard("s", Sanctum, Creature, Common, WithPower(2)), 0)
+	g.State.Cards[mars].Exhausted = true
+	g.State.Cards[sanc].Exhausted = true
+
+	g.AddLastingOnce(EventCreaturePlayed, actReadyPlayed, 0, 0, Mars)
+
+	// A non-Mars subject is filtered out: not readied, and the entry stays armed.
+	g.fireLasting(EventCreaturePlayed, 0, sanc)
+	if !g.State.Cards[sanc].Exhausted {
+		t.Error("a non-Mars creature should not be readied")
+	}
+	if g.State.LastingCount != 1 {
+		t.Errorf("entry should remain after a filtered subject, count = %d", g.State.LastingCount)
+	}
+
+	// A Mars subject is readied, and the one-shot entry removes itself.
+	g.fireLasting(EventCreaturePlayed, 0, mars)
+	if g.State.Cards[mars].Exhausted {
+		t.Error("the next Mars creature should enter ready")
+	}
+	if g.State.LastingCount != 0 {
+		t.Errorf("the one-shot entry should be removed, count = %d", g.State.LastingCount)
+	}
+}
+
+func TestLastingOnceOrdersWithPersistentReaction(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	mars := g.AddToBattleline(NewCard("m", Mars, Creature, Common, WithPower(2)), 0)
+	g.State.Cards[mars].Exhausted = true
+
+	// The one-shot sits between two persistent reactions, so removing it scans past
+	// the first and shifts the last down.
+	g.AddLasting(EventCreaturePlayed, actGainAember, 0, 1)
+	g.AddLastingOnce(EventCreaturePlayed, actReadyPlayed, 0, 0, Mars)
+	g.AddLasting(EventCreaturePlayed, actGainAember, 0, 1)
+
+	g.fireLasting(EventCreaturePlayed, 0, mars) // three reactions fire; ordering path runs
+
+	if g.Aember(0) != 2 {
+		t.Errorf("aember = %d, want 2", g.Aember(0))
+	}
+	if g.State.Cards[mars].Exhausted {
+		t.Error("the Mars creature should be readied")
+	}
+	if g.State.LastingCount != 2 {
+		t.Errorf("count = %d, want 2 (both persistent reactions remain)", g.State.LastingCount)
 	}
 }

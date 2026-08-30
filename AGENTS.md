@@ -34,7 +34,7 @@ today's shape. Keep such refactors focused, keep everything green (including 100
 
 - `game.go` + `game_*.go` — the `Game` runtime: methods on `*Game`, grouped by
   area (`game_turn.go`, `game_play.go`, `game_read.go`, `game_abilities.go`,
-  `game_combat.go`, `game_destroy.go`, …). A new `Game` method goes in the
+  `game_combat.go`, `game_leaves_play.go`, …). A new `Game` method goes in the
   matching `game_*.go`.
 - `effect.go` + `effect_*.go` — the effect AST, one file per mechanic
   (`effect_aember.go`, `effect_damage.go`, …). A new effect goes in

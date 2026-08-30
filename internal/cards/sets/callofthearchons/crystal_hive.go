@@ -20,6 +20,9 @@ var CrystalHive = card.New(
 	card.WithAbility(
 		card.Trigger.Action, card.ForRemainderOfTurn{
 			On: card.Event.Reap,
-			Do: card.GainAember{Player: card.Controller, Amount: 1},
+			Do: card.GainAember{
+				Player: card.Controller,
+				Amount: 1,
+			},
 		}),
 )

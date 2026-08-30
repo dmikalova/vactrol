@@ -104,6 +104,11 @@ func (g *Game) UseAction(player int, id LocalID) error {
 	if !g.cat.def(id).hasTrigger(TriggerAction) {
 		return ErrWrongType
 	}
+	if g.cat.def(id).Type == Artifact {
+		if err := g.chargeToll(player, TollUseArtifact); err != nil {
+			return err
+		}
+	}
 	g.useActionOf(id)
 	return nil
 }

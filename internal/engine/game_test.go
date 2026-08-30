@@ -6,7 +6,7 @@ import "testing"
 
 func TestPlayCreatureEntersStunned(t *testing.T) {
 	g := started(t)
-	g.AddToHand(NewCard("Stunner", Brobnar, Creature, Common, WithPower(3), WithEntersStunned()), 0)
+	g.AddToHand(NewCard("Stunner", Brobnar, Creature, Common, WithPower(3), WithEntersPlay(Stun{Target: Target{Kind: TargetThisCreature}})), 0)
 	id, err := g.PlayCreature(0, handIdx(g, 0, "Stunner"), false)
 	if err != nil {
 		t.Fatalf("PlayCreature: %v", err)
@@ -346,6 +346,31 @@ func TestChooseHouseWrongPlayer(t *testing.T) {
 	g.BeginTurn(0)
 	if err := g.ChooseHouse(1, Brobnar); err != ErrNotActivePlayer {
 		t.Errorf("err = %v, want ErrNotActivePlayer", err)
+	}
+}
+
+func TestChooseHouseForcedBindsWhenAvailable(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.SetPlayerHouses(0, []House{Mars, Logos, Untamed})
+	g.State.ActivePlayer = 0
+	g.State.ForcedHouse[0] = Mars
+	if err := g.ChooseHouse(0, Logos); err != ErrMustChooseForcedHouse {
+		t.Errorf("choosing a different house = %v, want ErrMustChooseForcedHouse", err)
+	}
+	if err := g.ChooseHouse(0, Mars); err != nil {
+		t.Errorf("choosing the forced house = %v, want nil", err)
+	}
+}
+
+// TestChooseHouseForcedIgnoredWhenUnavailable covers cannot overrides must: a
+// forced house the player's deck does not contain is ignored, freeing the choice.
+func TestChooseHouseForcedIgnoredWhenUnavailable(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	g.SetPlayerHouses(0, []House{Brobnar, Logos, Untamed})
+	g.State.ActivePlayer = 0
+	g.State.ForcedHouse[0] = Mars // a house player 0 does not have
+	if err := g.ChooseHouse(0, Brobnar); err != nil {
+		t.Errorf("cannot-overrides-must: an available house = %v, want nil", err)
 	}
 }
 

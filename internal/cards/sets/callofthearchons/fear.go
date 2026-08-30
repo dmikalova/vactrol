@@ -16,5 +16,8 @@ var Fear = card.New(
 	card.Rarity.Common,
 	card.Provenance(card.CotA, 58),
 	card.WithAbility(
-		card.Trigger.Play, card.MoveFromPlay{Target: card.Target.EnemyCreature, Destination: card.To.Hand}),
+		card.Trigger.Play, card.MoveFromPlay{
+			Target:      card.Target.EnemyCreature,
+			Destination: card.To.Hand,
+		}),
 )

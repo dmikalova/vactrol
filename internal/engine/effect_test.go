@@ -67,6 +67,34 @@ func TestRequiredTargetValidation(t *testing.T) {
 		}
 	}
 
+	// Target-taking effects reject an unset target and accept an explicit one.
+	this := Target{Kind: TargetThisCreature}
+	targetCases := []struct {
+		name       string
+		unset, set Effect
+	}{
+		{"DealDamage", DealDamage{Amount: 1}, DealDamage{Amount: 1, Target: this}},
+		{"Destroy", Destroy{}, Destroy{Target: this}},
+		{"Exalt", Exalt{Times: 1}, Exalt{Times: 1, Target: this}},
+		{"Exhaust", Exhaust{}, Exhaust{Target: this}},
+		{"Ready", Ready{}, Ready{Target: this}},
+		{"ReadyCreatures", ReadyCreatures{}, ReadyCreatures{Target: this}},
+		{"Stun", Stun{}, Stun{Target: this}},
+		{"Unstun", Unstun{}, Unstun{Target: this}},
+		{"PurgeCreature", PurgeCreature{}, PurgeCreature{Target: this}},
+		{"OnChooseCreature", OnChooseCreature{}, OnChooseCreature{Target: this}},
+		{"AddPowerCounter", AddPowerCounter{Amount: 1}, AddPowerCounter{Amount: 1, Target: this}},
+		{"RedirectFightDamage", RedirectFightDamage{}, RedirectFightDamage{Target: this}},
+	}
+	for _, tc := range targetCases {
+		if err := validateEffect(tc.unset); err == nil {
+			t.Errorf("%s with an unset target should be rejected", tc.name)
+		}
+		if err := validateEffect(tc.set); err != nil {
+			t.Errorf("%s with a target set should pass, got %v", tc.name, err)
+		}
+	}
+
 	// CannotFight needs both a player and a duration.
 	if err := validateEffect(CannotFight{Duration: NextTurn}); err == nil {
 		t.Error("CannotFight with an unset player should be rejected")

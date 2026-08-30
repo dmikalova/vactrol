@@ -1,0 +1,27 @@
+package callofthearchons
+
+import "github.com/dmikalova/vactrol/internal/card"
+
+// Blypyp
+//
+//	House:  Mars
+//	Type:   Creature
+//	Rarity: Uncommon
+//	Power:  2
+//	Traits: Martian • Scientist
+//
+//	Reap: The next Mars creature you play this turn enters play ready.
+var Blypyp = card.New(
+	"Blypyp",
+	card.House.Mars,
+	card.Type.Creature,
+	card.Rarity.Uncommon,
+	card.Provenance(card.CotA, 190),
+	card.WithPower(2),
+	card.WithTraits("Martian", "Scientist"),
+	card.WithAbility(
+		card.Trigger.Reap, card.NextCreaturePlayed{
+			Of:         card.House.Mars,
+			EntersPlay: card.Ready{Target: card.Target.Triggering},
+		}),
+)

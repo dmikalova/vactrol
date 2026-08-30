@@ -15,7 +15,7 @@ import (
 //	Power:  4
 //	Traits: Demon
 //
-//	Play: Charette captures 3 Æmber.
+//	Play: Charette captures 3 Æmber from your opponent.
 func TestCharette(t *testing.T) {
 	t.Run("captures 3 Æmber when played", func(t *testing.T) {
 		h := ct.Play(t, ct.Setup{

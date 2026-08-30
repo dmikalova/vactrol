@@ -124,6 +124,14 @@ func (g *Game) Aember(player int) int { return g.State.Aember[player] }
 // Keys returns a player's forged key count.
 func (g *Game) Keys(player int) int { return g.State.Keys[player] }
 
+// KeyColors returns the colours of the keys a player has forged, in forge order.
+func (g *Game) KeyColors(player int) []KeyColor {
+	n := g.State.Keys[player]
+	out := make([]KeyColor, n)
+	copy(out, g.State.KeyColors[player][:n])
+	return out
+}
+
 // Winner returns the winning player index, or -1 if the game is ongoing.
 func (g *Game) Winner() int { return g.State.Winner }
 

@@ -21,6 +21,11 @@ func (g *Game) fight(attacker, defender LocalID) {
 	g.State.Cards[attacker].Exhausted = true
 	g.triggerAbilities(attacker, TriggerBeforeFight, 0, false)
 
+	// A "Before Fight" ability may redirect the attacker's fight damage to another
+	// creature (Gabos Longarms). Read and clear it for this one fight.
+	redirect := g.State.FightDamageRedirect
+	g.State.FightDamageRedirect = 0
+
 	// Assault and Hazardous deal their damage before fight damage: the attacker's
 	// Assault hits the defender, the defender's Hazardous hits the attacker.
 	// Either can destroy a fighter before combat. Skipped if a "Before Fight"
@@ -47,7 +52,11 @@ func (g *Game) fight(attacker, defender LocalID) {
 		// resolved together as part of dealing it — so each dying creature is
 		// already in the discard before the other's "Destroyed:" ability (or the
 		// attacker's "After Fight") fires, and neither death changes the other's.
-		targets := []DamageTarget{{ID: defender, Amount: g.fightDamage(attacker, defender)}}
+		dmgTarget := defender
+		if redirect != 0 {
+			dmgTarget = redirect
+		}
+		targets := []DamageTarget{{ID: dmgTarget, Amount: g.fightDamage(attacker, defender)}}
 		if !g.hasKeyword(attacker, Skirmish) {
 			targets = append(targets, DamageTarget{ID: attacker, Amount: dp})
 		}
