@@ -1,0 +1,33 @@
+package callofthearchons
+
+import "github.com/dmikalova/vactrol/internal/card"
+
+// Combat Pheromones
+//
+//	House:  Mars
+//	Type:   Artifact
+//	Rarity: Uncommon
+//	Æmber:  1
+//	Traits: Item
+//
+//	Versatile.
+//	Action: Destroy Combat Pheromones. Use 2 other Mars cards, one at a time.
+var CombatPheromones = card.New(
+	"Combat Pheromones",
+	card.House.Mars,
+	card.Type.Artifact,
+	card.Rarity.Uncommon,
+	card.Provenance(card.CotA, 180),
+	card.WithAemberBonus(1),
+	card.WithTraits("Item"),
+	card.WithKeywords(card.Keyword.Versatile),
+	card.WithAbility(
+		card.Trigger.Action, card.Sequence{Effects: []card.Effect{
+			card.Sentence{Effect: card.Destroy{Target: card.Target.This}},
+			card.UseFriendlyCardsOfHouse{
+				House: card.House.Mars,
+				Count: 2,
+				Other: true,
+			},
+		}}),
+)

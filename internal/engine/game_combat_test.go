@@ -264,6 +264,69 @@ func TestFightDamageRedirect(t *testing.T) {
 	}
 }
 
+func TestBeforeFightCanCancelFight(t *testing.T) {
+	g := started(t) // Brobnar is active
+	top := g.AddToDeck(NewCard("Brobnar Top", Brobnar, Action, Common), 0)
+	attacker := g.AddToBattleline(NewCard("evader", Brobnar, Creature, Common,
+		WithPower(5),
+		WithAssault(2),
+		WithAbility(TriggerBeforeFight, DiscardTopOfDeckAndCancelFightIfActiveHouse{}),
+		WithAbility(TriggerAfterFight, GainAember{Player: Controller, Amount: 1}),
+	), 0)
+	defender := g.AddToBattleline(NewCard("hazard", Brobnar, Creature, Common, WithPower(8), WithHazardous(3)), 1)
+
+	if err := g.Fight(0, attacker, defender); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+
+	if discard := g.Discard(0); len(discard) != 1 || discard[0] != top {
+		t.Errorf("discard = %v, want discarded top card %d", discard, top)
+	}
+	if !g.State.Cards[attacker].Exhausted {
+		t.Error("attacker should still be exhausted from being used to fight")
+	}
+	if g.Damage(attacker) != 0 {
+		t.Errorf("attacker damage = %d, want 0 (Hazardous skipped)", g.Damage(attacker))
+	}
+	if g.Damage(defender) != 0 {
+		t.Errorf("defender damage = %d, want 0 (Assault and fight damage skipped)", g.Damage(defender))
+	}
+	if g.Aember(0) != 0 {
+		t.Errorf("after-fight ability fired: Æmber = %d, want 0", g.Aember(0))
+	}
+	if g.State.FightCancelled {
+		t.Error("fight cancellation flag should be cleared after the fight")
+	}
+}
+
+func TestBeforeFightCancelMissStillFights(t *testing.T) {
+	g := started(t) // Brobnar is active
+	top := g.AddToDeck(NewCard("Mars Top", Mars, Action, Common), 0)
+	attacker := g.AddToBattleline(NewCard("evader", Brobnar, Creature, Common,
+		WithPower(9),
+		WithAbility(TriggerBeforeFight, DiscardTopOfDeckAndCancelFightIfActiveHouse{}),
+		WithAbility(TriggerAfterFight, GainAember{Player: Controller, Amount: 1}),
+	), 0)
+	defender := g.AddToBattleline(testCreature("defender", 8), 1)
+
+	if err := g.Fight(0, attacker, defender); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+
+	if discard := g.Discard(0); len(discard) != 1 || discard[0] != top {
+		t.Errorf("discard = %v, want discarded top card %d", discard, top)
+	}
+	if g.Damage(attacker) != 8 {
+		t.Errorf("attacker damage = %d, want 8", g.Damage(attacker))
+	}
+	if g.inPlay(defender) {
+		t.Error("defender should be destroyed by the uncancelled fight")
+	}
+	if g.Aember(0) != 1 {
+		t.Errorf("after-fight ability did not fire: Æmber = %d, want 1", g.Aember(0))
+	}
+}
+
 func TestAssaultAndHazardous(t *testing.T) {
 	// Assault: the attacker deals its Assault to the defender before fight damage.
 	g := NewGame("A", "B", 1)

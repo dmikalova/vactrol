@@ -85,6 +85,44 @@ func TestDestroyMovesUpgradesToDiscard(t *testing.T) {
 	}
 }
 
+func TestUpgradeCanPreventHostDestructionOnce(t *testing.T) {
+	g := started(t)
+	shield := NewCard("Shield", Sanctum, Upgrade, Rare,
+		WithStatic(StaticModifier{PreventsDestruction: true}))
+	host := g.AddToBattleline(testCreature("host", 3,
+		WithAbility(TriggerDestroyed, GainAember{Player: Controller, Amount: 1})), 0)
+	attachUpgrade(g, host, shield)
+	upgrade := g.Upgrades(host)[0]
+	g.State.Cards[host].Damage = 2
+
+	g.DealDamage(0, []DamageTarget{{ID: host, Amount: 1}})
+
+	if !g.inPlay(host) {
+		t.Fatal("host should stay in play when its destruction is prevented")
+	}
+	if g.Damage(host) != 0 {
+		t.Errorf("host damage = %d, want fully healed", g.Damage(host))
+	}
+	if g.State.Cards[host].UpgradeCount != 0 {
+		t.Errorf("host upgrade count = %d, want the shield consumed", g.State.Cards[host].UpgradeCount)
+	}
+	if got := g.Discard(0); len(got) != 1 || got[0] != upgrade {
+		t.Errorf("discard = %v, want only the consumed upgrade", got)
+	}
+	if g.Aember(0) != 0 {
+		t.Errorf("destroyed ability fired despite prevention; Æmber = %d, want 0", g.Aember(0))
+	}
+
+	g.DealDamage(0, []DamageTarget{{ID: host, Amount: 3}})
+
+	if g.inPlay(host) {
+		t.Fatal("host should be destroyed by the next lethal hit")
+	}
+	if got := g.Discard(0); len(got) != 2 || got[1] != host {
+		t.Errorf("discard = %v, want consumed upgrade then host", got)
+	}
+}
+
 func TestDestroyGivesAmberToOpponent(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	c := g.AddToBattleline(testCreature("c", 3), 0) // owned by player 0

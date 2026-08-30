@@ -1,7 +1,5 @@
 package engine
 
-import "strings"
-
 // This file holds how a card is USED — the player actions that reap, fight, or
 // activate an "Action:" ability — the checks that gate them, and the machinery
 // that fires a card's triggered abilities. Combat resolution lives in
@@ -14,13 +12,13 @@ import "strings"
 // Versatile only relaxes using: a Versatile card is still played from hand only
 // when its own house is active.
 func (g *Game) usableInActiveHouse(id LocalID) bool {
-	return g.inActiveHouse(g.cat.def(id)) || g.hasKeyword(id, Versatile)
+	return g.manual || g.State.ActiveHouse == HouseNone || g.House(id) == g.State.ActiveHouse || g.hasKeyword(id, Versatile)
 }
 
 // usable runs the checks shared by reaping, fighting, and using an action
-// ability: the card must be owned by the active player, in play, unexhausted, and
-// usable under the active house. It does not restrict by card type — callers add
-// that.
+// ability: the card must be controlled by the active player, in play, unexhausted,
+// and usable under the active house. It does not restrict by card type — callers
+// add that.
 func (g *Game) usable(player int, id LocalID) error {
 	if g.State.Winner >= 0 {
 		return ErrGameOver
@@ -28,7 +26,7 @@ func (g *Game) usable(player int, id LocalID) error {
 	if g.State.ActivePlayer != player {
 		return ErrNotActivePlayer
 	}
-	if g.owner(id) != player || !g.inPlay(id) {
+	if g.controller(id) != player || !g.inPlay(id) {
 		return ErrWrongType
 	}
 	if g.State.Cards[id].Exhausted {
@@ -65,14 +63,25 @@ func (g *Game) Reap(player int, id LocalID) error {
 	return nil
 }
 
+// recordUse marks one successful use of a creature this turn. "Used" is the
+// rulebook umbrella for reaping, fighting, or using an Action: ability; the count
+// advances before that use resolves so Fight:/Reap: abilities see their first use
+// as count 1.
+func (g *Game) recordUse(id LocalID) {
+	if g.cat.def(id).Type == Creature {
+		g.State.Cards[id].TimesUsedThisTurn++
+	}
+}
+
 // reapWith performs a reap driven by a rule or ability, with no active-player or
 // active-house checks: a stunned creature recovers instead; otherwise it
 // exhausts, its controller gains 1 Æmber, and its "Reap:" abilities fire.
 func (g *Game) reapWith(id LocalID) {
+	g.recordUse(id)
 	if g.recoverFromStun(id) {
 		return
 	}
-	p := g.owner(id)
+	p := g.controller(id)
 	g.State.Cards[id].Exhausted = true
 	g.gainReapAember(p, id)
 	g.triggerAbilities(id, TriggerAfterReap, 0, false)
@@ -92,7 +101,10 @@ func (g *Game) gainReapAember(p int, source LocalID) {
 		}
 		return
 	}
-	g.State.Aember[p]++
+	if capturer, ok := g.gainAember(p, 1); ok {
+		g.logf("%s reaps with %s, but %s captures the Æmber", g.names[p], g.Name(source), g.Name(capturer))
+		return
+	}
 	g.logf("%s reaps with %s (+1 Æmber)", g.names[p], g.Name(source))
 }
 
@@ -101,7 +113,7 @@ func (g *Game) UseAction(player int, id LocalID) error {
 	if err := g.usable(player, id); err != nil {
 		return err
 	}
-	if !g.cat.def(id).hasTrigger(TriggerAction) {
+	if !g.hasTrigger(id, TriggerAction) {
 		return ErrWrongType
 	}
 	if g.cat.def(id).Type == Artifact {
@@ -116,11 +128,12 @@ func (g *Game) UseAction(player int, id LocalID) error {
 // useActionOf fires a card's "Action:" ability, driven by a rule or ability: a
 // stunned card recovers instead; otherwise it exhausts and its "Action:" fires.
 func (g *Game) useActionOf(id LocalID) {
+	g.recordUse(id)
 	if g.recoverFromStun(id) {
 		return
 	}
 	g.State.Cards[id].Exhausted = true
-	g.logf("%s uses %s's action ability", g.names[g.owner(id)], g.Name(id))
+	g.logf("%s uses %s's action ability", g.names[g.controller(id)], g.Name(id))
 	g.triggerAbilities(id, TriggerAction, 0, false)
 }
 
@@ -137,25 +150,51 @@ func (g *Game) Fight(player int, attacker, defender LocalID) error {
 			return err
 		}
 	}
-	if g.cat.def(defender).Type != Creature || g.owner(defender) == player || !g.inPlay(defender) {
+	if g.cat.def(defender).Type != Creature || g.controller(defender) == player || !g.inPlay(defender) {
 		return ErrNoTarget
 	}
 	if fr := g.cat.def(attacker).FightRestriction; fr != (Target{}) &&
 		!fr.allows(&EffectContext{Resolver: g, Source: attacker, Controller: player}, defender) {
 		return ErrNoTarget
 	}
-	if g.recoverFromStun(attacker) {
-		return nil
-	}
 	g.fight(attacker, defender)
 	return nil
+}
+
+// hasTrigger reports whether an in-play card has the trigger itself, from an
+// attached upgrade, or from a constant ability affecting it.
+func (g *Game) hasTrigger(id LocalID, trigger Trigger) bool {
+	if g.cat.def(id).hasTrigger(trigger) {
+		return true
+	}
+	for _, upgrade := range g.Upgrades(id) {
+		for _, ab := range g.cat.def(upgrade).Static.Granted {
+			if ab.Trigger == trigger {
+				return true
+			}
+		}
+	}
+	for player := 0; player < 2; player++ {
+		for _, grantor := range g.allInPlay(player) {
+			c := g.cat.def(grantor).Constant
+			if !g.constantAffects(grantor, c, id) {
+				continue
+			}
+			for _, ab := range c.Granted {
+				if ab.Trigger == trigger {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // mayFightOutOfHouse reports whether a fight grant (Brothers in Battle) lets the
 // attacker fight this turn despite not being in the active house.
 func (g *Game) mayFightOutOfHouse(attacker LocalID) bool {
-	h := g.State.MayFightHouse[g.owner(attacker)]
-	return h != HouseNone && g.cat.def(attacker).House == h
+	h := g.State.MayFightHouse[g.controller(attacker)]
+	return h != HouseNone && g.House(attacker) == h
 }
 
 // FightTargets returns the enemy creatures the attacker may legally fight right
@@ -214,16 +253,16 @@ func (g *Game) readyToUse(id LocalID) bool {
 // acting on its host creature. The upgrade is the card that was played, but its
 // ability speaks of "this creature" — the host — so the host is the effect source
 // that self-references resolve to.
-func (g *Game) fireUpgradePlay(host LocalID, up *CardDefinition) {
+func (g *Game) fireUpgradePlay(host, upgrade LocalID, up *CardDefinition) {
 	for _, ab := range up.Abilities {
 		if ab.Trigger != TriggerAfterPlay {
 			continue
 		}
-		g.logf("%s: %s", up.Name, strings.ReplaceAll(RenderAbility(ab), SelfName, g.Name(host)))
+		g.logf("%s: %s", up.Name, abilityTextWithNames(RenderAbility(ab), g.Name(host), up.Name))
 		ab.Effect.Resolve(&EffectContext{
 			Resolver:   g,
 			Source:     host,
-			Controller: g.owner(host),
+			Controller: g.owner(upgrade),
 		})
 	}
 }
@@ -273,7 +312,7 @@ func (g *Game) triggerAbilities(src LocalID, trigger Trigger, it LocalID, hasIt 
 		ab.Effect.Resolve(&EffectContext{
 			Resolver:   g,
 			Source:     src,
-			Controller: g.owner(src),
+			Controller: g.controller(src),
 			It:         it,
 			HasIt:      hasIt,
 		})

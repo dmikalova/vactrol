@@ -47,24 +47,40 @@ type Resolver interface {
 	HasTrait(id LocalID, trait Trait) bool
 	// House returns a card's house.
 	House(id LocalID) House
+	// ActiveHouse returns the house chosen for the current turn.
+	ActiveHouse() House
 	// Keys returns the number of keys a player has forged.
 	Keys(player int) int
 	// ForgeKey has a player forge one key at the current cost, if affordable.
 	ForgeKey(player int)
+	// ForgeKeyFree has a player forge one key without paying its current cost.
+	ForgeKeyFree(player int)
+	// CardsPlayedOfHouseThisTurn returns the house-specific play count for this turn.
+	CardsPlayedOfHouseThisTurn(player int, house House) int
 
 	// ---- single-card / pool changes ----
 
 	// SetAember sets a player's Æmber pool (never below zero).
 	SetAember(player, amount int)
+	// GainAember adds Æmber from the common supply to a player's pool, allowing
+	// in-play replacements such as Ether Spider to capture it instead. It returns
+	// the capturer and true when the gain was replaced.
+	GainAember(player, amount int) (LocalID, bool)
 	// SetDamage sets the damage on a creature (never below zero).
 	SetDamage(id LocalID, amount int)
 	// SetStunned sets a creature's stun status.
 	SetStunned(id LocalID, stunned bool)
 	// SetExhausted sets a creature's exhausted status.
 	SetExhausted(id LocalID, exhausted bool)
+	// BelongToHouseForRemainderOfTurn makes a card belong to house until its
+	// controller's turn ends.
+	BelongToHouseForRemainderOfTurn(id LocalID, house House)
 	// SetFightDamageRedirect redirects the attacker's fight damage in the fight in
 	// progress to another creature (Gabos Longarms), read and cleared by combat.
 	SetFightDamageRedirect(id LocalID)
+	// CancelCurrentFight makes the fight in progress not occur. Combat reads and
+	// clears it after Before Fight abilities resolve.
+	CancelCurrentFight()
 	// AddAmberOn changes the Æmber sitting on a card.
 	AddAmberOn(id LocalID, delta int)
 	// AddPowerCounter changes the net power counters on a creature, adjusting its
@@ -78,6 +94,12 @@ type Resolver interface {
 	DealDamage(controller int, targets []DamageTarget)
 	// DestroyEach destroys the given creatures as one simultaneous event.
 	DestroyEach(controller int, ids []LocalID)
+	// TakeControl moves a creature into controller's battleline without changing
+	// ownership; when it later leaves play it still goes to its owner's zone.
+	TakeControl(id LocalID, controller int)
+	// SwapBattlelinePositions exchanges two creatures' positions in the same
+	// battleline without moving any state between the creatures.
+	SwapBattlelinePositions(a, b LocalID)
 	// Draw makes a player draw count cards.
 	Draw(controller, count int)
 	// MoveToTopOfDeck moves a card from play to the top of its owner's deck.
@@ -93,6 +115,9 @@ type Resolver interface {
 	// ArchiveTopOfDeck moves the top card of a player's deck to their archives,
 	// reporting whether a card was available.
 	ArchiveTopOfDeck(player int) bool
+	// DiscardTopOfDeck moves the top card of a player's deck to their discard pile,
+	// returning that card and whether one was available.
+	DiscardTopOfDeck(player int) (LocalID, bool)
 	// DiscardArchives moves all of a player's archived cards to their discard pile.
 	// The active player performs the discard, so they choose the order for their own
 	// archives but get a random order for an opponent's (which they cannot see).
@@ -110,6 +135,9 @@ type Resolver interface {
 	MoveFromDiscardToHand(id LocalID)
 	// MoveFromDeckToHand moves a card from its owner's deck to their hand.
 	MoveFromDeckToHand(id LocalID)
+	// PlayTopOfDeckIfHouse reveals a player's top deck card and plays it if it is
+	// of the named house.
+	PlayTopOfDeckIfHouse(player int, house House)
 	// ShuffleDiscardIntoDeck moves a player's whole discard pile into their deck
 	// and shuffles it.
 	ShuffleDiscardIntoDeck(player int)
@@ -137,12 +165,19 @@ type Resolver interface {
 	// ForceActiveHouseNextTurn makes a player have to choose the given house as their
 	// active house on their next turn.
 	ForceActiveHouseNextTurn(player int, house House)
+	// GiveRemainingAemberAfterKeyForgeNextTurn makes a player give their remaining
+	// Æmber to another player after forging a key during their next turn.
+	GiveRemainingAemberAfterKeyForgeNextTurn(forger, beneficiary int)
 	// OrderByChoice lets a player arrange ids into a resolution order.
 	OrderByChoice(controller int, prompt string, ids []LocalID) []LocalID
 	// ChooseCreature asks a player to pick one creature from candidates; a sole
 	// candidate is taken automatically. source is the card whose ability is asking
 	// (usually ctx.Source), for prompt attribution.
 	ChooseCreature(player int, source LocalID, prompt string, candidates []LocalID) (LocalID, bool)
+	// ChooseCard asks a player to pick one card from candidates; a sole candidate
+	// is taken automatically. source is the card whose ability is asking (usually
+	// ctx.Source), for prompt attribution.
+	ChooseCard(player int, source LocalID, prompt string, candidates []LocalID) (LocalID, bool)
 	// ChooseOption asks a player to pick one of several labeled options, returning
 	// its index (0 when the player's chooser expresses no preference). source is the
 	// card whose ability is asking (usually ctx.Source), for prompt attribution.
@@ -165,6 +200,8 @@ type Resolver interface {
 	Exhausted(id LocalID) bool
 	// Stunned reports whether a creature is stunned.
 	Stunned(id LocalID) bool
+	// TimesUsedThisTurn reports how many times a creature has been used this turn.
+	TimesUsedThisTurn(id LocalID) int
 	// Logf writes a line to the game log.
 	Logf(format string, args ...any)
 }
@@ -179,11 +216,11 @@ func (g *Game) Owner(id LocalID) int { return g.owner(id) }
 // HasTrait reports whether a card has a trait.
 func (g *Game) HasTrait(id LocalID, trait Trait) bool { return g.cat.def(id).hasTrait(trait) }
 
-// House returns a card's house.
-func (g *Game) House(id LocalID) House { return g.cat.def(id).House }
-
 // ForgeKey has a player forge one key at its current cost, if affordable.
 func (g *Game) ForgeKey(player int) { g.forgeKey(player) }
+
+// ForgeKeyFree has a player forge one key without paying its current cost.
+func (g *Game) ForgeKeyFree(player int) { g.forgeKeyFree(player) }
 
 // IsCreature reports whether a card is a creature.
 func (g *Game) IsCreature(id LocalID) bool { return g.cat.def(id).Type == Creature }
@@ -213,9 +250,19 @@ func (g *Game) SetStunned(id LocalID, stunned bool) { g.State.Cards[id].Stunned 
 // SetExhausted sets a creature's exhausted status.
 func (g *Game) SetExhausted(id LocalID, exhausted bool) { g.State.Cards[id].Exhausted = exhausted }
 
+// BelongToHouseForRemainderOfTurn makes a card belong to house until its
+// controller's turn ends.
+func (g *Game) BelongToHouseForRemainderOfTurn(id LocalID, house House) {
+	g.State.Cards[id].TempHouse = house
+}
+
 // SetFightDamageRedirect redirects the attacker's fight damage in the current
 // fight to another creature; the combat step reads and clears it.
 func (g *Game) SetFightDamageRedirect(id LocalID) { g.State.FightDamageRedirect = id }
+
+// CancelCurrentFight makes the fight in progress not occur; the combat step reads
+// and clears it before Assault, Hazardous, and fight damage.
+func (g *Game) CancelCurrentFight() { g.State.FightCancelled = true }
 
 // AddAmberOn changes the Æmber sitting on a card.
 func (g *Game) AddAmberOn(id LocalID, delta int) { g.State.Cards[id].Amber += int16(delta) }
@@ -227,6 +274,9 @@ func (g *Game) DealDamage(controller int, targets []DamageTarget) {
 
 // DestroyEach is the Resolver entry point for destroyEach.
 func (g *Game) DestroyEach(controller int, ids []LocalID) { g.destroyEach(controller, ids) }
+
+// TakeControl is the Resolver entry point for takeControl.
+func (g *Game) TakeControl(id LocalID, controller int) { g.takeControl(id, controller) }
 
 // Draw is the Resolver entry point for the internal draw.
 func (g *Game) Draw(controller, count int) { g.draw(controller, count) }
@@ -312,6 +362,12 @@ func (g *Game) ChooseCreature(player int, source LocalID, prompt string, candida
 	return g.pickCreature(player, g.sourceName(source), prompt, candidates)
 }
 
+// ChooseCard asks a player to choose one card from candidates, attributing the
+// prompt to the source card. A sole candidate is taken automatically.
+func (g *Game) ChooseCard(player int, source LocalID, prompt string, candidates []LocalID) (LocalID, bool) {
+	return g.pickCard(player, g.sourceName(source), prompt, candidates)
+}
+
 // ChooseOption asks a player to choose one of several labeled options, attributing
 // the prompt to the source card. If the player's chooser expresses no preference
 // (does not implement OptionChooser), the first option is taken.
@@ -370,7 +426,7 @@ func (g *Game) UseActionOf(id LocalID) {
 }
 
 // HasAction reports whether a card has an "Action:" ability.
-func (g *Game) HasAction(id LocalID) bool { return g.cat.def(id).hasTrigger(TriggerAction) }
+func (g *Game) HasAction(id LocalID) bool { return g.hasTrigger(id, TriggerAction) }
 
 // Logf writes a line to the game log.
 func (g *Game) Logf(format string, args ...any) { g.logf(format, args...) }

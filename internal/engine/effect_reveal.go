@@ -62,3 +62,78 @@ func (CardsRevealed) Value(ctx *EffectContext) int { return ctx.Revealed }
 
 // CountText renders the singular noun the "for each" clause repeats.
 func (CardsRevealed) CountText() string { return "card revealed this way" }
+
+// DiscardTopOfDeckAndRevealHandForAember ties the house of a discarded deck card
+// to a hand reveal. The player discards the top card of their deck and reveals
+// their hand; then the gainer gains 1 Æmber for each revealed card sharing the
+// discarded card's house. If the deck is empty, no card establishes a house, so
+// the reveal and gain are skipped.
+type DiscardTopOfDeckAndRevealHandForAember struct {
+	Player Player
+	Gainer Player
+}
+
+// validate rejects the effect when either relative player was left unset.
+func (e DiscardTopOfDeckAndRevealHandForAember) validate() error {
+	if !e.Player.valid() {
+		return errUnsetPlayer("DiscardTopOfDeckAndRevealHandForAember")
+	}
+	if !e.Gainer.valid() {
+		return errUnsetPlayer("DiscardTopOfDeckAndRevealHandForAember")
+	}
+	return nil
+}
+
+// Text renders the linked discard, reveal, and reward. The reciprocal form is how
+// A Fair Game prints its second half: "Your opponent repeats the preceding effect
+// on you."
+func (e DiscardTopOfDeckAndRevealHandForAember) Text() string {
+	gain := "You gain"
+	if e.Gainer == Opponent {
+		gain = "Your opponent gains"
+	}
+	if e.Player == Controller && e.Gainer == Opponent {
+		return "your opponent repeats the preceding effect on you"
+	}
+	deck := "your deck"
+	hand := "your hand"
+	if e.Player == Opponent {
+		deck = "your opponent's deck"
+		hand = "their hand"
+	}
+	return "discard the top card of " + deck + " and reveal " + hand + ". " +
+		gain + " 1 Æmber for each card of the discarded card's house revealed this way."
+}
+
+// Resolve discards the top deck card, reveals the same player's hand, and pays the
+// gainer for each revealed card of the discarded card's house.
+func (e DiscardTopOfDeckAndRevealHandForAember) Resolve(ctx *EffectContext) {
+	player := ctx.PlayerFor(e.Player)
+	discarded, ok := ctx.Resolver.DiscardTopOfDeck(player)
+	if !ok {
+		ctx.Revealed = 0
+		return
+	}
+	discardedHouse := ctx.Resolver.House(discarded)
+	revealed, matching := e.revealAndCount(ctx, player, discardedHouse)
+	ctx.Revealed = revealed
+	if matching > 0 {
+		GainAember{Player: e.Gainer, Amount: matching}.Resolve(ctx)
+	}
+}
+
+// revealAndCount reveals the player's whole hand and counts cards of house among
+// the revealed cards.
+func (e DiscardTopOfDeckAndRevealHandForAember) revealAndCount(ctx *EffectContext, player int, house House) (revealed, matching int) {
+	var names []string
+	for _, id := range ctx.Resolver.Hand(player) {
+		names = append(names, ctx.Resolver.Name(id))
+		if ctx.Resolver.House(id) == house {
+			matching++
+		}
+	}
+	if len(names) > 0 {
+		ctx.Resolver.Logf("%s reveals %s", ctx.Resolver.PlayerName(player), strings.Join(names, ", "))
+	}
+	return len(names), matching
+}

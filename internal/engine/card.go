@@ -62,6 +62,18 @@ type CardDefinition struct {
 	// keys cost +1 Æmber"). The zero value changes nothing.
 	KeyCostChange KeyCostChange
 
+	// OffHousePlayGrant is a continuous play permission this card grants while in
+	// play: its controller may play one card of that house on a turn where that
+	// house is not their active house. HouseNone grants nothing.
+	OffHousePlayGrant House
+
+	// CapturesOpponentAember is a continuous replacement this creature applies
+	// while it is in play: each Æmber that would be added to its opponent's pool is
+	// captured by this creature instead. It replaces gains from the common supply;
+	// pool-to-pool moves such as stealing, capturing, and returning captured Æmber
+	// are not gains and do not use it.
+	CapturesOpponentAember bool
+
 	// Abilities are the triggered abilities on the card.
 	Abilities []Ability
 }
@@ -161,6 +173,15 @@ type StaticModifier struct {
 	// KeyCostChange is a key-cost change an Upgrade grants its host; while attached
 	// the host imposes it (e.g. "Your opponent's keys cost +2 Æmber").
 	KeyCostChange KeyCostChange
+
+	// PreventsDestruction replaces the host creature's destruction by fully healing
+	// that creature and destroying this Upgrade instead.
+	PreventsDestruction bool
+
+	// TakesControl marks an Upgrade whose presence controls its host. When that
+	// Upgrade leaves play while the host remains in play, control reverts to the
+	// host's owner.
+	TakesControl bool
 }
 
 // ConstantAbility is a continuous stat modifier a card in play applies to
@@ -332,6 +353,18 @@ func WithRestrictions(r Restrictions) CardOption {
 // it affects and by how much).
 func WithKeyCost(kc KeyCostChange) CardOption {
 	return func(c *CardDefinition) { c.KeyCostChange = kc }
+}
+
+// WithOffHousePlayGrant makes the card, while in play, let its controller play
+// one card of house on a turn where house is not their active house.
+func WithOffHousePlayGrant(house House) CardOption {
+	return func(c *CardDefinition) { c.OffHousePlayGrant = house }
+}
+
+// WithCaptureOpponentAember makes this creature capture each Æmber that would be
+// added to its opponent's pool while this creature is in play.
+func WithCaptureOpponentAember() CardOption {
+	return func(c *CardDefinition) { c.CapturesOpponentAember = true }
 }
 
 // WithAbility appends a triggered ability to the card.

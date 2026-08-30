@@ -60,6 +60,33 @@ func (e ArchiveTopOfDeck) Resolve(ctx *EffectContext) {
 	}
 }
 
+// ArchiveFromPlay moves each in-play card its Target selects into its owner's
+// archives, shedding damage, armor, upgrades, and other in-play state.
+type ArchiveFromPlay struct {
+	Target Target
+}
+
+// validate requires an explicit target.
+func (e ArchiveFromPlay) validate() error {
+	if !e.Target.valid() {
+		return errUnsetTarget("ArchiveFromPlay")
+	}
+	return nil
+}
+
+// Text renders the effect, e.g. "archive each friendly Knight trait creature from
+// play".
+func (e ArchiveFromPlay) Text() string {
+	return fmt.Sprintf("archive %s from play", e.Target.Text())
+}
+
+// Resolve archives each selected in-play card.
+func (e ArchiveFromPlay) Resolve(ctx *EffectContext) {
+	for _, id := range e.Target.Select(ctx) {
+		ctx.Resolver.MoveToArchives(id)
+	}
+}
+
 // DiscardArchives moves all of a player's archived cards into their discard pile.
 type DiscardArchives struct {
 	Player Player

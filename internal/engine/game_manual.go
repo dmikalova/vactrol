@@ -64,9 +64,8 @@ func (g *Game) ManualMove(id LocalID, dest ManualZone) {
 // simply unlisted.
 func (g *Game) removeFromAnyZone(id LocalID) {
 	o := g.owner(id)
-	if g.State.Battleline[o].contains(id) || g.State.Artifacts[o].contains(id) {
-		g.State.Battleline[o].remove(id)
-		g.State.Artifacts[o].remove(id)
+	if g.inPlay(id) {
+		g.removeFromPlay(id)
 		g.discardUpgrades(id)
 		g.resetCore(id)
 		return

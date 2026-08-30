@@ -19,18 +19,28 @@ const (
 // CardCore is the mutable per-match state of a single card, stored purely by
 // value. It carries no pointers so the whole GameState copies flat.
 type CardCore struct {
-	Exhausted      bool
-	Stunned        bool
-	Damage         int16
-	ArmorRemaining int16
+	Exhausted bool
+	Stunned   bool
+	// TimesUsedThisTurn counts how many times this creature has been USED this
+	// turn — to reap, fight, or use an Action: ability. BeginTurn clears every
+	// creature's count; leaving play clears it through resetCore.
+	TimesUsedThisTurn int16
+	Damage            int16
+	ArmorRemaining    int16
 	// Amber is Æmber sitting on the card (e.g. placed by exalt or capture). It
 	// belongs to no player's pool while it stays here.
 	Amber int16
 	// PowerCounters is the net power from +1/-1 power counters placed on the card;
 	// it adds to the creature's power for as long as it stays in play.
 	PowerCounters int16
-	UpgradeCount  uint8
-	Upgrades      [maxUpgrades]LocalID
+	// TempHouse is the house this in-play card belongs to until its controller's
+	// turn ends. HouseNone means it belongs to its printed house.
+	TempHouse    House
+	UpgradeCount uint8
+	Upgrades     [maxUpgrades]LocalID
+	// ControlPlus is a temporary control override: 0 means the owner controls the
+	// card, otherwise the controller is ControlPlus-1. Ownership never changes.
+	ControlPlus uint8
 }
 
 // CardList is an ordered, fixed-capacity collection of card ids (hand, deck, battle
@@ -148,6 +158,13 @@ type GameState struct {
 	// BeginTurn. It backs card-play limits such as Ember Imp's "your opponent cannot
 	// play more than 2 cards each turn."
 	CardsPlayedThisTurn [2]int
+	// CardsPlayedByHouseThisTurn[p][h] counts how many cards of house h player p has
+	// played this turn. It resets with CardsPlayedThisTurn and backs conditions such
+	// as Epic Quest's "7 or more Sanctum cards this turn."
+	CardsPlayedByHouseThisTurn [2][NumHouses]int
+	// OffHousePlaysUsedThisTurn[p][h] counts how many off-house play permissions for
+	// house h player p has spent this turn (Witch of the Wilds). BeginTurn resets it.
+	OffHousePlaysUsedThisTurn [2][NumHouses]int
 
 	// ForcedHouse[p] is the house player p must choose as their active house this
 	// turn (Control the Weak); ForcedHouseNext[p] arms that for p's next turn.
@@ -156,11 +173,23 @@ type GameState struct {
 	ForcedHouse     [2]House
 	ForcedHouseNext [2]House
 
+	// KeyForgeAemberGive[p] means that after player p forges a key this turn, they
+	// give their remaining Æmber to KeyForgeAemberGiveBeneficiary[p]. The Next fields
+	// arm that delayed transfer for p's next turn (Interdimensional Graft).
+	KeyForgeAemberGive                [2]bool
+	KeyForgeAemberGiveNext            [2]bool
+	KeyForgeAemberGiveBeneficiary     [2]int8
+	KeyForgeAemberGiveBeneficiaryNext [2]int8
+
 	// FightDamageRedirect is the creature a "Before Fight" ability chose to receive
 	// the attacker's fight damage instead of the defender (Gabos Longarms). It is
 	// set during the fight in progress and read and cleared by the combat step; 0
 	// means the attacker's fight damage hits the creature it is fighting as usual.
 	FightDamageRedirect LocalID
+	// FightCancelled means a "Before Fight" ability made the fight not occur
+	// (Evasion Sigil). It is set during the fight in progress and read and cleared
+	// before Assault, Hazardous, fight damage, and Fight: abilities would resolve.
+	FightCancelled bool
 }
 
 // FastCopy returns an independent copy of the state. Because every field is a

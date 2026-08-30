@@ -3,6 +3,35 @@
 Repo-wide guidance for agents. See `internal/cards/AGENTS.md` for
 card-authoring specifics.
 
+## Build, test, and lint through `mage`
+
+Run all build/test/format/coverage tasks through `mage`, not raw `go`
+commands. The targets wrap the project's conventions (engine coverage gate,
+comment/rulebook generation, gofmt), so use them:
+
+- `mage build` — build all packages.
+- `mage test` — run all tests.
+- `mage vet` — run `go vet`.
+- `mage fmt` / `mage fmtCheck` — format, or check formatting without writing.
+- `mage cover` — run engine tests and report coverage (kept at 100%).
+- `mage generateComments` — rewrite each card's doc comment from its definition.
+- `mage gen` — regenerate card comments and the rulebook.
+- `mage check` — the full green gate (fmt-check, build, vet, test, coverage);
+  run this before considering work done. It must print `ALL GREEN`.
+
+Card research (so you never need a throwaway grep/JSON script):
+
+- `mage lookup "<name>"` — print every source card whose name contains the
+  query, with set code, collector number, house/type/rarity, printed text, and a
+  ready-made `card.Provenance(...)` call.
+- `mage missing <setSlug>` — list the source cards in a set not yet tagged by an
+  implemented card (the cards still to implement); slugs match the files in
+  `internal/cards/provenance` minus `.json` (e.g. `callofthearchons`).
+- `mage coverage` — per-source-set count of cards covered by an implemented
+  card's provenance Ref.
+
+Run `mage -l` to see every target.
+
 ## Multiple agents may be running
 
 More than one agent can be working in this repo at the same time. If the build,

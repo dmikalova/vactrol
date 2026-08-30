@@ -101,6 +101,14 @@ func (ctx *EffectContext) ChooseCreature(prompt string, candidates []LocalID) (L
 	return ctx.Resolver.ChooseCreature(ctx.Controller, ctx.Source, prompt, candidates)
 }
 
+// ChooseCard asks the controlling player to pick one card from candidates,
+// attributing the prompt to this ability's source card. It is the common form of
+// Resolver.ChooseCard; call the Resolver directly only when a different player
+// makes the choice.
+func (ctx *EffectContext) ChooseCard(prompt string, candidates []LocalID) (LocalID, bool) {
+	return ctx.Resolver.ChooseCard(ctx.Controller, ctx.Source, prompt, candidates)
+}
+
 // ChooseOption asks the controlling player to pick one labeled option, attributing
 // the prompt to this ability's source card.
 func (ctx *EffectContext) ChooseOption(prompt string, options []string) int {
@@ -140,3 +148,7 @@ func (p Player) valid() bool { return p != playerUnset }
 // card; RenderCardText and the game log substitute it with the card's name so
 // text like "{self} captures 1 Æmber" prints as "Charette captures 1 Æmber".
 const SelfName = "{self}"
+
+// UpgradeName is a placeholder an Upgrade's own Play effect uses when the text
+// must name the Upgrade rather than its host creature.
+const UpgradeName = "{upgrade}"

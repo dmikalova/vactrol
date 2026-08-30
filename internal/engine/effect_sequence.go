@@ -37,7 +37,25 @@ func (e Sequence) Text() string {
 		parts = append(parts, phrase)
 		i = next
 	}
-	return strings.Join(parts, ", and ")
+	return joinSequenceParts(parts)
+}
+
+// joinSequenceParts preserves the usual ", and" flow for phrase effects, but lets
+// a child effect that already rendered a full sentence continue with the next
+// effect as a new sentence.
+func joinSequenceParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	text := parts[0]
+	for _, part := range parts[1:] {
+		if strings.HasSuffix(text, ".") {
+			text += " " + capitalizeFirst(part)
+			continue
+		}
+		text += ", and " + part
+	}
+	return text
 }
 
 // foldCombinable folds the run of combinables starting at i into one phrase and

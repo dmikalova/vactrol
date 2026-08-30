@@ -11,8 +11,35 @@ func (g *Game) Def(id LocalID) *CardDefinition { return g.cat.def(id) }
 // owner returns the owning player index for an id.
 func (g *Game) owner(id LocalID) int { return g.cat.owner(id) }
 
+// controller returns the player currently controlling id. By KeyForge rule,
+// ownership is immutable and decides where a card goes out of play; control is
+// temporary and is represented by which battleline/artifact row the card occupies.
+// ControlPlus uses 0 for "owner controls" and stores controller+1 otherwise so
+// player 0 can be represented.
+func (g *Game) controller(id LocalID) int {
+	if c := g.State.Cards[id].ControlPlus; c != 0 {
+		return int(c - 1)
+	}
+	return g.owner(id)
+}
+
 // Name returns a card's printed name.
 func (g *Game) Name(id LocalID) string { return g.cat.def(id).Name }
+
+// House returns the house a card currently belongs to. A temporary "belongs to
+// house" effect applies only while the card remains in play; everywhere else the
+// card keeps its printed house.
+func (g *Game) House(id LocalID) House {
+	if g.inPlay(id) {
+		if h := g.State.Cards[id].TempHouse; h != HouseNone {
+			return h
+		}
+	}
+	return g.cat.def(id).House
+}
+
+// ActiveHouse returns the house chosen for the current turn.
+func (g *Game) ActiveHouse() House { return g.State.ActiveHouse }
 
 // Power returns a creature's current power including attached upgrades.
 func (g *Game) Power(id LocalID) int {
@@ -60,7 +87,7 @@ func (g *Game) constantBonus(id LocalID, pick func(ConstantAbility) int) int {
 // constantAffects reports whether the constant ability c on source src reaches
 // creature id, resolving c's Target from src's point of view.
 func (g *Game) constantAffects(src LocalID, c ConstantAbility, id LocalID) bool {
-	ctx := &EffectContext{Resolver: g, Source: src, Controller: g.owner(src)}
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: g.controller(src)}
 	for _, t := range c.target().Select(ctx) {
 		if t == id {
 			return true
@@ -118,11 +145,26 @@ func (g *Game) Exhausted(id LocalID) bool { return g.State.Cards[id].Exhausted }
 // Stunned reports whether a creature is stunned.
 func (g *Game) Stunned(id LocalID) bool { return g.State.Cards[id].Stunned }
 
+// TimesUsedThisTurn reports how many times this creature has been USED this turn:
+// reaped, fought, or had its Action: ability used.
+func (g *Game) TimesUsedThisTurn(id LocalID) int {
+	return int(g.State.Cards[id].TimesUsedThisTurn)
+}
+
 // Aember returns a player's Æmber pool.
 func (g *Game) Aember(player int) int { return g.State.Aember[player] }
 
 // Keys returns a player's forged key count.
 func (g *Game) Keys(player int) int { return g.State.Keys[player] }
+
+// CardsPlayedOfHouseThisTurn returns how many cards of a house a player has
+// played this turn.
+func (g *Game) CardsPlayedOfHouseThisTurn(player int, house House) int {
+	if int(house) >= NumHouses {
+		return 0
+	}
+	return g.State.CardsPlayedByHouseThisTurn[player][house]
+}
 
 // KeyColors returns the colours of the keys a player has forged, in forge order.
 func (g *Game) KeyColors(player int) []KeyColor {
@@ -168,10 +210,16 @@ func (g *Game) Upgrades(id LocalID) []LocalID {
 	return out
 }
 
-// inPlay reports whether an id is on its owner's battleline or artifact row.
+// inPlay reports whether an id is in either player's battleline or artifact row.
+// A controlled creature physically sits in its controller's battleline while its
+// owner remains unchanged, so this must not assume owner == controller.
 func (g *Game) inPlay(id LocalID) bool {
-	o := g.owner(id)
-	return g.State.Battleline[o].contains(id) || g.State.Artifacts[o].contains(id)
+	for p := 0; p < 2; p++ {
+		if g.State.Battleline[p].contains(id) || g.State.Artifacts[p].contains(id) {
+			return true
+		}
+	}
+	return false
 }
 
 // cannotFight reports whether a player is barred from using creatures to fight,
@@ -215,16 +263,17 @@ func (g *Game) cannotPlayCard(player int) bool {
 	return false
 }
 
-// keyCostChangeFor returns how much a single in-play card (owned by owner) changes
-// target's key cost — its own change plus any granted by attached upgrades.
-func (g *Game) keyCostChangeFor(id LocalID, owner, target int) int {
+// keyCostChangeFor returns how much a single in-play card (controlled by
+// controller) changes target's key cost — its own change plus any granted by
+// attached upgrades.
+func (g *Game) keyCostChangeFor(id LocalID, controller, target int) int {
 	total := 0
-	if kc := g.cat.def(id).KeyCostChange; kc.affects(owner, target) {
+	if kc := g.cat.def(id).KeyCostChange; kc.affects(controller, target) {
 		total += kc.amount
 	}
 	core := &g.State.Cards[id]
 	for i := 0; i < int(core.UpgradeCount); i++ {
-		if kc := g.cat.def(core.Upgrades[i]).Static.KeyCostChange; kc.affects(owner, target) {
+		if kc := g.cat.def(core.Upgrades[i]).Static.KeyCostChange; kc.affects(controller, target) {
 			total += kc.amount
 		}
 	}
@@ -235,9 +284,9 @@ func (g *Game) keyCostChangeFor(id LocalID, owner, target int) int {
 // plus every key-cost change on a card in play that affects that player.
 func (g *Game) keyCost(target int) int {
 	cost := KeyCost
-	for owner := 0; owner < 2; owner++ {
-		for _, id := range g.allInPlay(owner) {
-			cost += g.keyCostChangeFor(id, owner, target)
+	for controller := 0; controller < 2; controller++ {
+		for _, id := range g.allInPlay(controller) {
+			cost += g.keyCostChangeFor(id, controller, target)
 		}
 	}
 	return cost

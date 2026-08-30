@@ -7,12 +7,26 @@ func TestSequenceEffect(t *testing.T) {
 	src := g.AddToBattleline(testCreature("src", 1), 0)
 	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
 	seq := Sequence{Effects: []Effect{GainAember{Player: Controller, Amount: 1}, GainAember{Player: Controller, Amount: 2}}}
+	if got := (Sequence{}).Text(); got != "" {
+		t.Errorf("empty sequence text = %q, want empty", got)
+	}
 	if seq.Text() != "gain 1 Æmber, and gain 2 Æmber" {
 		t.Errorf("sequence text = %q", seq.Text())
 	}
 	seq.Resolve(ctx)
 	if g.State.Aember[0] != 3 {
 		t.Errorf("aember = %d, want 3", g.State.Aember[0])
+	}
+}
+
+func TestSequenceContinuesAfterCompleteSentence(t *testing.T) {
+	seq := Sequence{Effects: []Effect{
+		DiscardTopOfDeckAndRevealHandForAember{Player: Opponent, Gainer: Controller},
+		DiscardTopOfDeckAndRevealHandForAember{Player: Controller, Gainer: Opponent},
+	}}
+	want := "discard the top card of your opponent's deck and reveal their hand. You gain 1 Æmber for each card of the discarded card's house revealed this way. Your opponent repeats the preceding effect on you"
+	if got := seq.Text(); got != want {
+		t.Errorf("sequence text = %q, want %q", got, want)
 	}
 }
 

@@ -55,6 +55,20 @@ func (g *Game) canDraw(player int) bool {
 	return g.State.Deck[player].Count > 0 || g.State.Discard[player].Count > 0
 }
 
+// DiscardTopOfDeck moves the top card of a player's deck to their discard pile.
+// Unlike drawing, discarding from the deck does not recycle the discard pile: if
+// there is no top card to discard, the effect simply does as much as it can.
+func (g *Game) DiscardTopOfDeck(player int) (LocalID, bool) {
+	deck := &g.State.Deck[player]
+	if deck.Count == 0 {
+		return 0, false
+	}
+	id := deck.removeAt(0)
+	g.State.Discard[player].add(id)
+	g.logf("%s discards the top card of their deck", g.names[player])
+	return id, true
+}
+
 // Shuffle randomizes a player's deck using the game's seeded RNG.
 func (g *Game) Shuffle(player int) {
 	d := &g.State.Deck[player]

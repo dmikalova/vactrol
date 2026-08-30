@@ -39,8 +39,7 @@ func (g *Game) purgeFromPlay(id LocalID) {
 // state. It returns the owner so the caller can file the card in the right zone.
 func (g *Game) leavePlayDestroyed(id LocalID) int {
 	o := g.owner(id)
-	g.State.Battleline[o].remove(id)
-	g.State.Artifacts[o].remove(id)
+	g.removeFromPlay(id)
 	g.discardUpgrades(id)
 	core := &g.State.Cards[id]
 	if core.Amber > 0 {
@@ -51,15 +50,81 @@ func (g *Game) leavePlayDestroyed(id LocalID) int {
 	return o
 }
 
+// removeFromPlay removes id from every in-play zone. A card normally appears only
+// under its owner, but control-changing effects move creatures into another
+// player's battleline while ownership stays fixed, so leave-play teardown must
+// scan both players' rows.
+func (g *Game) removeFromPlay(id LocalID) {
+	for p := 0; p < 2; p++ {
+		g.State.Battleline[p].remove(id)
+		g.State.Artifacts[p].remove(id)
+	}
+}
+
 // discardUpgrades moves a card's attached upgrades to their owner's discard pile.
 // A card that leaves play — destroyed or relocated — sheds its upgrades this way;
 // they do not follow it to hand, deck, or archives.
 func (g *Game) discardUpgrades(id LocalID) {
-	o := g.owner(id)
 	core := &g.State.Cards[id]
 	for i := 0; i < int(core.UpgradeCount); i++ {
-		g.State.Discard[o].add(core.Upgrades[i])
+		up := core.Upgrades[i]
+		g.revertControlFromUpgrade(id, up)
+		g.State.Discard[g.owner(up)].add(up)
 	}
+}
+
+// preventDestructionWithUpgrade applies the first attached Upgrade that replaces
+// its host's destruction: the host stays in play, is fully healed, and that single
+// Upgrade is destroyed instead. It reports whether the destruction was replaced.
+func (g *Game) preventDestructionWithUpgrade(id LocalID) bool {
+	i, up, ok := g.creatureHasDestructionShield(id)
+	if !ok {
+		return false
+	}
+	g.State.Cards[id].Damage = 0
+	g.discardAttachedUpgradeAt(id, i)
+	g.logf("%s would be destroyed, so %s fully heals it and is destroyed", g.Name(id), g.Name(up))
+	return true
+}
+
+// creatureHasDestructionShield finds the first attached Upgrade that can replace
+// this creature's destruction.
+func (g *Game) creatureHasDestructionShield(id LocalID) (int, LocalID, bool) {
+	core := &g.State.Cards[id]
+	for i := 0; i < int(core.UpgradeCount); i++ {
+		up := core.Upgrades[i]
+		if g.cat.def(up).Static.PreventsDestruction {
+			return i, up, true
+		}
+	}
+	return 0, 0, false
+}
+
+// discardAttachedUpgradeAt detaches one Upgrade from a host and puts that Upgrade
+// into its owner's discard pile, preserving the order of the remaining upgrades.
+func (g *Game) discardAttachedUpgradeAt(host LocalID, i int) {
+	core := &g.State.Cards[host]
+	up := core.Upgrades[i]
+	count := int(core.UpgradeCount)
+	copy(core.Upgrades[i:], core.Upgrades[i+1:count])
+	core.UpgradeCount--
+	core.Upgrades[count-1] = 0
+	g.revertControlFromUpgrade(host, up)
+	g.resetCore(up)
+	g.State.Discard[g.owner(up)].add(up)
+}
+
+// replacePreventedDestructions removes creatures whose destruction was replaced
+// from the pending destruction set before any Destroyed abilities are collected.
+func (g *Game) replacePreventedDestructions(ids []LocalID) []LocalID {
+	var out []LocalID
+	for _, id := range ids {
+		if g.preventDestructionWithUpgrade(id) {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
 }
 
 // destroyTogether destroys several creatures as one simultaneous event, matching
@@ -71,6 +136,7 @@ func (g *Game) discardUpgrades(id LocalID) {
 // Ritual purges it) cannot resolve any of its remaining abilities. Then every
 // creature still in play goes to its discard pile.
 func (g *Game) destroyTogether(controller int, ids []LocalID) {
+	ids = g.replacePreventedDestructions(ids)
 	for _, id := range ids {
 		g.logf("%s is destroyed", g.Name(id))
 	}
@@ -95,7 +161,7 @@ func (g *Game) destroyTogether(controller int, ids []LocalID) {
 		pick := g.pickDestroyedAbility(controller, pending, src)
 		ab := pending[pick]
 		g.logf("%s: %s", g.Name(ab.source), renderAbilityLine(g.cat.def(ab.source), ab.ability))
-		ab.ability.Effect.Resolve(&EffectContext{Resolver: g, Source: ab.source, Controller: g.owner(ab.source)})
+		ab.ability.Effect.Resolve(&EffectContext{Resolver: g, Source: ab.source, Controller: g.controller(ab.source)})
 		pending = append(pending[:pick], pending[pick+1:]...)
 	}
 	for _, id := range ids {
@@ -165,8 +231,7 @@ func (g *Game) destroyEach(controller int, ids []LocalID) {
 // deck, clearing the per-match state it accrued while in play.
 func (g *Game) moveToTopOfDeck(id LocalID) {
 	o := g.owner(id)
-	g.State.Battleline[o].remove(id)
-	g.State.Artifacts[o].remove(id)
+	g.removeFromPlay(id)
 	g.discardUpgrades(id)
 	g.resetCore(id)
 	g.State.Deck[o].addFront(id)
@@ -177,8 +242,7 @@ func (g *Game) moveToTopOfDeck(id LocalID) {
 // clearing the per-match state it accrued while in play.
 func (g *Game) moveToHand(id LocalID) {
 	o := g.owner(id)
-	g.State.Battleline[o].remove(id)
-	g.State.Artifacts[o].remove(id)
+	g.removeFromPlay(id)
 	g.discardUpgrades(id)
 	g.resetCore(id)
 	g.State.Hand[o].add(id)
@@ -189,8 +253,7 @@ func (g *Game) moveToHand(id LocalID) {
 // archives, clearing the per-match state it accrued while in play.
 func (g *Game) moveToArchives(id LocalID) {
 	o := g.owner(id)
-	g.State.Battleline[o].remove(id)
-	g.State.Artifacts[o].remove(id)
+	g.removeFromPlay(id)
 	g.discardUpgrades(id)
 	g.resetCore(id)
 	g.State.Archives[o].add(id)
@@ -201,8 +264,7 @@ func (g *Game) moveToArchives(id LocalID) {
 // deck, clearing the per-match state it accrued while in play.
 func (g *Game) moveToDeckShuffled(id LocalID) {
 	o := g.owner(id)
-	g.State.Battleline[o].remove(id)
-	g.State.Artifacts[o].remove(id)
+	g.removeFromPlay(id)
 	g.discardUpgrades(id)
 	g.resetCore(id)
 	g.State.Deck[o].add(id)

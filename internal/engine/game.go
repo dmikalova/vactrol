@@ -135,6 +135,16 @@ func (g *Game) pickCreature(player int, source, prompt string, candidates []Loca
 	return g.chooserFor(player).ChooseCreature(source, prompt, candidates)
 }
 
+// pickCard resolves a "choose one card" prompt. It uses the same chooser channel
+// as creature choices because a prompt is still one visible card chosen from a set;
+// callers are responsible for passing the legal card candidates.
+func (g *Game) pickCard(player int, source, prompt string, candidates []LocalID) (LocalID, bool) {
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+	return g.chooserFor(player).ChooseCreature(source, prompt, candidates)
+}
+
 // orderByChoice asks controller to arrange ids into a resolution order by picking
 // the next one repeatedly (the final id is forced, so it is never prompted). With
 // 0 or 1 ids there is nothing to order and ids is returned unchanged; a rejected

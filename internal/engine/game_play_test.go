@@ -84,6 +84,143 @@ func TestCardPlayLimit(t *testing.T) {
 	}
 }
 
+func TestCardsPlayedByHouseThisTurn(t *testing.T) {
+	g := NewGame("Alice", "Bob", 1)
+	g.BeginTurn(0)
+	creature := g.AddToHand(NewCard("brobnar creature", Brobnar, Creature, Common, WithPower(3)), 0)
+	artifact := g.AddToHand(NewCard("sanctum artifact", Sanctum, Artifact, Common), 0)
+	action := g.AddToHand(NewCard("sanctum action", Sanctum, Action, Common), 0)
+	upgrade := g.AddToHand(NewCard("mars upgrade", Mars, Upgrade, Common), 0)
+
+	if _, err := g.PlayCreature(0, handIdxByID(g, 0, creature), false); err != nil {
+		t.Fatalf("PlayCreature: %v", err)
+	}
+	if _, err := g.PlayArtifact(0, handIdxByID(g, 0, artifact)); err != nil {
+		t.Fatalf("PlayArtifact: %v", err)
+	}
+	if err := g.PlayAction(0, handIdxByID(g, 0, action)); err != nil {
+		t.Fatalf("PlayAction: %v", err)
+	}
+	if _, err := g.PlayUpgrade(0, handIdxByID(g, 0, upgrade)); err != nil {
+		t.Fatalf("PlayUpgrade: %v", err)
+	}
+
+	if got := g.CardsPlayedOfHouseThisTurn(0, Brobnar); got != 1 {
+		t.Errorf("Brobnar plays = %d, want 1", got)
+	}
+	if got := g.CardsPlayedOfHouseThisTurn(0, Sanctum); got != 2 {
+		t.Errorf("Sanctum plays = %d, want 2", got)
+	}
+	if got := g.CardsPlayedOfHouseThisTurn(0, Mars); got != 1 {
+		t.Errorf("Mars plays = %d, want 1", got)
+	}
+	if got := g.CardsPlayedOfHouseThisTurn(0, House(99)); got != 0 {
+		t.Errorf("unknown-house plays = %d, want 0", got)
+	}
+	if got := g.State.CardsPlayedThisTurn[0]; got != 4 {
+		t.Errorf("total plays = %d, want 4", got)
+	}
+
+	g.BeginTurn(0)
+	if got := g.CardsPlayedOfHouseThisTurn(0, Sanctum); got != 0 {
+		t.Errorf("Sanctum plays after reset = %d, want 0", got)
+	}
+	if got := g.State.CardsPlayedThisTurn[0]; got != 0 {
+		t.Errorf("total plays after reset = %d, want 0", got)
+	}
+}
+
+func TestOffHousePlayGrant(t *testing.T) {
+	witch := NewCard("Witch", Untamed, Creature, Rare, WithPower(4), WithOffHousePlayGrant(Untamed))
+
+	t.Run("allows one off-house play and consumes it", func(t *testing.T) {
+		g := started(t)
+		g.AddToBattleline(witch, 0)
+		first := g.AddToHand(NewCard("bear", Untamed, Creature, Common, WithPower(3)), 0)
+		second := g.AddToHand(NewCard("wolf", Untamed, Creature, Common, WithPower(3)), 0)
+
+		if err := g.CanPlay(0, first); err != nil {
+			t.Fatalf("CanPlay first off-house Untamed = %v, want nil", err)
+		}
+		if got := g.State.OffHousePlaysUsedThisTurn[0][Untamed]; got != 0 {
+			t.Fatalf("CanPlay consumed off-house grant: used = %d, want 0", got)
+		}
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, first), false); err != nil {
+			t.Fatalf("first off-house play: %v", err)
+		}
+		if got := g.State.OffHousePlaysUsedThisTurn[0][Untamed]; got != 1 {
+			t.Fatalf("off-house plays used = %d, want 1", got)
+		}
+		if err := g.CanPlay(0, second); err != ErrWrongHouse {
+			t.Fatalf("CanPlay second off-house Untamed = %v, want ErrWrongHouse", err)
+		}
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, second), false); err != ErrWrongHouse {
+			t.Fatalf("second off-house play = %v, want ErrWrongHouse", err)
+		}
+
+		g.EndTurn(0)
+		g.BeginTurn(0)
+		if err := g.ChooseHouse(0, Brobnar); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, second), false); err != nil {
+			t.Fatalf("off-house play after reset: %v", err)
+		}
+	})
+
+	t.Run("does not matter when Untamed is active", func(t *testing.T) {
+		g := NewGame("Alice", "Bob", 1)
+		g.BeginTurn(0)
+		if err := g.ChooseHouse(0, Untamed); err != nil {
+			t.Fatal(err)
+		}
+		g.AddToBattleline(witch, 0)
+		first := g.AddToHand(NewCard("boar", Untamed, Creature, Common, WithPower(3)), 0)
+		second := g.AddToHand(NewCard("fox", Untamed, Creature, Common, WithPower(3)), 0)
+
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, first), false); err != nil {
+			t.Fatalf("first active-house play: %v", err)
+		}
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, second), false); err != nil {
+			t.Fatalf("second active-house play: %v", err)
+		}
+		if got := g.State.OffHousePlaysUsedThisTurn[0][Untamed]; got != 0 {
+			t.Fatalf("active-house plays used off-house grant: got %d, want 0", got)
+		}
+	})
+
+	t.Run("rejects off-house play without a grant", func(t *testing.T) {
+		g := started(t)
+		untamed := g.AddToHand(NewCard("badger", Untamed, Creature, Common, WithPower(3)), 0)
+
+		if err := g.CanPlay(0, untamed); err != ErrWrongHouse {
+			t.Fatalf("CanPlay without Witch = %v, want ErrWrongHouse", err)
+		}
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, untamed), false); err != ErrWrongHouse {
+			t.Fatalf("PlayCreature without Witch = %v, want ErrWrongHouse", err)
+		}
+	})
+
+	t.Run("counts each controlled grant", func(t *testing.T) {
+		g := started(t)
+		g.AddToBattleline(witch, 0)
+		g.AddToBattleline(witch, 0)
+		first := g.AddToHand(NewCard("hare", Untamed, Creature, Common, WithPower(3)), 0)
+		second := g.AddToHand(NewCard("lynx", Untamed, Creature, Common, WithPower(3)), 0)
+		third := g.AddToHand(NewCard("mole", Untamed, Creature, Common, WithPower(3)), 0)
+
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, first), false); err != nil {
+			t.Fatalf("first off-house play with two grants: %v", err)
+		}
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, second), false); err != nil {
+			t.Fatalf("second off-house play with two grants: %v", err)
+		}
+		if _, err := g.PlayCreature(0, handIdxByID(g, 0, third), false); err != ErrWrongHouse {
+			t.Fatalf("third off-house play with two grants = %v, want ErrWrongHouse", err)
+		}
+	})
+}
+
 func TestPlayCardLimitTargets(t *testing.T) {
 	cases := []struct {
 		name         string

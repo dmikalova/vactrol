@@ -38,6 +38,23 @@ func TestConditionalEffect(t *testing.T) {
 	}
 }
 
+func TestCardsPlayedOfHouseAtLeastCondition(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	ctx := &EffectContext{Resolver: g, Controller: 0}
+	cond := CardsPlayedOfHouseAtLeast{House: Sanctum, Amount: 7}
+	if cond.CondText() != "if you have played 7 or more Sanctum cards this turn" {
+		t.Errorf("text = %q", cond.CondText())
+	}
+	g.State.CardsPlayedByHouseThisTurn[0][Sanctum] = 6
+	if cond.Met(ctx) {
+		t.Error("six Sanctum cards should not satisfy a seven-card condition")
+	}
+	g.State.CardsPlayedByHouseThisTurn[0][Sanctum] = 7
+	if !cond.Met(ctx) {
+		t.Error("seven Sanctum cards should satisfy the condition")
+	}
+}
+
 func TestRepeatWhile(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	g.State.Aember[0], g.State.Aember[1] = 0, 5 // opponent leads

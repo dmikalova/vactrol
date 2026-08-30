@@ -16,15 +16,26 @@ package engine
 // fight resolves combat between an attacker and a defender. Both deal damage equal
 // to their power simultaneously; Skirmish prevents the attacker taking damage back.
 func (g *Game) fight(attacker, defender LocalID) {
+	g.recordUse(attacker)
+	if g.recoverFromStun(attacker) {
+		return
+	}
 	// Using a creature to fight exhausts it before anything else resolves, so a
 	// "Before Fight" ability already sees the attacker exhausted.
 	g.State.Cards[attacker].Exhausted = true
 	g.triggerAbilities(attacker, TriggerBeforeFight, 0, false)
 
 	// A "Before Fight" ability may redirect the attacker's fight damage to another
-	// creature (Gabos Longarms). Read and clear it for this one fight.
+	// creature (Gabos Longarms) or make the fight not occur (Evasion Sigil). Read
+	// and clear those per-fight flags before the combat step.
 	redirect := g.State.FightDamageRedirect
 	g.State.FightDamageRedirect = 0
+	cancelled := g.State.FightCancelled
+	g.State.FightCancelled = false
+	if cancelled {
+		g.logf("%s's fight does not occur", g.Name(attacker))
+		return
+	}
 
 	// Assault and Hazardous deal their damage before fight damage: the attacker's
 	// Assault hits the defender, the defender's Hazardous hits the attacker.
@@ -39,7 +50,7 @@ func (g *Game) fight(attacker, defender LocalID) {
 			pre = append(pre, DamageTarget{ID: attacker, Amount: h})
 		}
 		if len(pre) > 0 {
-			g.dealDamage(g.owner(attacker), pre...)
+			g.dealDamage(g.controller(attacker), pre...)
 		}
 	}
 
@@ -60,7 +71,7 @@ func (g *Game) fight(attacker, defender LocalID) {
 		if !g.hasKeyword(attacker, Skirmish) {
 			targets = append(targets, DamageTarget{ID: attacker, Amount: dp})
 		}
-		g.dealDamage(g.owner(attacker), targets...)
+		g.dealDamage(g.controller(attacker), targets...)
 	}
 	g.triggerAbilities(attacker, TriggerAfterFight, 0, false)
 
@@ -77,9 +88,9 @@ func (g *Game) fight(attacker, defender LocalID) {
 }
 
 // onFlankOf reports whether a creature sits on a flank (the leftmost or rightmost
-// creature) of its owner's battleline.
+// creature) of its controller's battleline.
 func (g *Game) onFlankOf(id LocalID) bool {
-	bl := g.State.Battleline[g.owner(id)].slice()
+	bl := g.State.Battleline[g.controller(id)].slice()
 	return len(bl) > 0 && (bl[0] == id || bl[len(bl)-1] == id)
 }
 

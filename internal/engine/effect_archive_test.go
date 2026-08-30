@@ -75,6 +75,37 @@ func TestArchiveTopOfDeckEffect(t *testing.T) {
 	}
 }
 
+func TestArchiveFromPlayEffect(t *testing.T) {
+	g := NewGame("A", "B", 1)
+	src := g.AddArtifact(NewCard("quest", Sanctum, Artifact, Rare), 0)
+	knight := g.AddToBattleline(NewCard("knight", Sanctum, Creature, Common, WithPower(4), WithTraits("Knight")), 0)
+	nonKnight := g.AddToBattleline(NewCard("cleric", Sanctum, Creature, Common, WithPower(4), WithTraits("Cleric")), 0)
+	enemyKnight := g.AddToBattleline(NewCard("enemy", Sanctum, Creature, Common, WithPower(4), WithTraits("Knight")), 1)
+	ctx := &EffectContext{Resolver: g, Source: src, Controller: 0}
+
+	e := ArchiveFromPlay{Target: Target{Kind: TargetEachFriendlyCreature}.WithTrait("Knight")}
+	if e.Text() != "archive each friendly Knight trait creature from play" {
+		t.Errorf("text = %q", e.Text())
+	}
+	e.Resolve(ctx)
+
+	if g.inPlay(knight) || !g.State.Archives[0].contains(knight) {
+		t.Error("friendly Knight should be archived")
+	}
+	if !g.inPlay(nonKnight) {
+		t.Error("friendly non-Knight should stay in play")
+	}
+	if !g.inPlay(enemyKnight) {
+		t.Error("enemy Knight should stay in play")
+	}
+	if err := validateEffect(e); err != nil {
+		t.Errorf("valid archive-from-play effect rejected: %v", err)
+	}
+	if err := validateEffect(ArchiveFromPlay{}); err == nil {
+		t.Error("unset target should be rejected")
+	}
+}
+
 func TestArchivesOfferedOnChooseHouse(t *testing.T) {
 	g := NewGame("A", "B", 1)
 	a := g.AddToHand(testCreature("a", 1), 0)

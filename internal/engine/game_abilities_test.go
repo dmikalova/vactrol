@@ -43,6 +43,40 @@ func TestReapAndActionAbility(t *testing.T) {
 	}
 }
 
+func TestTimesUsedThisTurn(t *testing.T) {
+	g := started(t)
+	user := g.AddToBattleline(testCreature("user", 6, WithAbility(TriggerAction, GainAember{Player: Controller, Amount: 1})), 0)
+	defender := g.AddToBattleline(testCreature("defender", 1), 1)
+
+	if err := g.Reap(0, user); err != nil {
+		t.Fatalf("Reap: %v", err)
+	}
+	if got := g.TimesUsedThisTurn(user); got != 1 {
+		t.Fatalf("after reap, times used = %d, want 1", got)
+	}
+
+	g.State.Cards[user].Exhausted = false
+	if err := g.Fight(0, user, defender); err != nil {
+		t.Fatalf("Fight: %v", err)
+	}
+	if got := g.TimesUsedThisTurn(user); got != 2 {
+		t.Fatalf("after fight, times used = %d, want 2", got)
+	}
+
+	g.State.Cards[user].Exhausted = false
+	if err := g.UseAction(0, user); err != nil {
+		t.Fatalf("UseAction: %v", err)
+	}
+	if got := g.TimesUsedThisTurn(user); got != 3 {
+		t.Fatalf("after action, times used = %d, want 3", got)
+	}
+
+	g.BeginTurn(1)
+	if got := g.TimesUsedThisTurn(user); got != 0 {
+		t.Fatalf("BeginTurn reset times used = %d, want 0", got)
+	}
+}
+
 func TestCanUseErrors(t *testing.T) {
 	g := started(t)
 	// Enemy creature (owner mismatch).
@@ -196,6 +230,38 @@ func TestGrantedAbilitiesFireFromUpgrades(t *testing.T) {
 	g.triggerAbilities(host, TriggerAfterReap, 0, false)
 	if g.Aember(0) != 1 {
 		t.Errorf("granted Reap ability aember = %d, want 1", g.Aember(0))
+	}
+}
+
+func TestGrantedActionAbilitiesCanBeUsed(t *testing.T) {
+	g := started(t)
+	upgraded := g.AddToBattleline(testCreature("upgraded", 5), 0)
+	attachUpgrade(g, upgraded, NewCard("controls", Logos, Upgrade, Rare,
+		WithStatic(StaticModifier{Granted: []Ability{
+			{Trigger: TriggerAction, Effect: GainAember{Player: Controller, Amount: 2}},
+		}})))
+
+	if err := g.UseAction(0, upgraded); err != nil {
+		t.Fatalf("UseAction with upgrade-granted action: %v", err)
+	}
+	if g.Aember(0) != 2 {
+		t.Fatalf("aember after upgrade-granted action = %d, want 2", g.Aember(0))
+	}
+
+	constantGranted := g.AddToBattleline(testCreature("constant-granted", 5), 0)
+	g.AddArtifact(NewCard("ritual", Logos, Artifact, Rare,
+		WithConstantAbility(ConstantAbility{
+			Target: Target{Kind: TargetEachCreature},
+			Granted: []Ability{
+				{Trigger: TriggerAction, Effect: GainAember{Player: Controller, Amount: 3}},
+			},
+		})), 0)
+
+	if err := g.UseAction(0, constantGranted); err != nil {
+		t.Fatalf("UseAction with constant-granted action: %v", err)
+	}
+	if g.Aember(0) != 5 {
+		t.Fatalf("aember after constant-granted action = %d, want 5", g.Aember(0))
 	}
 }
 

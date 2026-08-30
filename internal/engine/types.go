@@ -19,6 +19,9 @@ const (
 	Sanctum
 	Shadows
 	Untamed
+	// NumHouses is the number of house enum slots, including HouseNone, so house-
+	// indexed state arrays can use a flat fixed size.
+	NumHouses = int(Untamed) + 1
 )
 
 // houseNames maps a House to its printed name, indexed by the enum value.

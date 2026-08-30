@@ -48,39 +48,49 @@ type (
 	Unstun          = engine.Unstun
 	Exhaust         = engine.Exhaust
 	Ready           = engine.Ready
+	ReadyIfFirstUse = engine.ReadyIfFirstUse
 	ReadyCreatures  = engine.ReadyCreatures
 	AddPowerCounter = engine.AddPowerCounter
 )
 
 // Drawing, moving, and revealing cards between zones.
 type (
-	Draw                = engine.Draw
-	MoveFromPlay        = engine.MoveFromPlay
-	MoveArtifactsToHand = engine.MoveArtifactsToHand
-	MoveFromDiscard     = engine.MoveFromDiscard
-	ReturnNamedToHand   = engine.ReturnNamedToHand
-	SearchForName       = engine.SearchForName
-	ShuffleDiscard      = engine.ShuffleDiscard
-	ArchiveFromHand     = engine.ArchiveFromHand
-	ArchiveTopOfDeck    = engine.ArchiveTopOfDeck
-	DiscardArchives     = engine.DiscardArchives
-	DiscardHand         = engine.DiscardHand
-	Reveal              = engine.Reveal
+	Draw                                        = engine.Draw
+	MoveFromPlay                                = engine.MoveFromPlay
+	MoveArtifactsToHand                         = engine.MoveArtifactsToHand
+	MoveFromDiscard                             = engine.MoveFromDiscard
+	ReturnNamedToHand                           = engine.ReturnNamedToHand
+	SearchForName                               = engine.SearchForName
+	ShuffleDiscard                              = engine.ShuffleDiscard
+	ArchiveFromHand                             = engine.ArchiveFromHand
+	ArchiveTopOfDeck                            = engine.ArchiveTopOfDeck
+	ArchiveFromPlay                             = engine.ArchiveFromPlay
+	DiscardArchives                             = engine.DiscardArchives
+	DiscardHand                                 = engine.DiscardHand
+	DiscardTopOfDeckAndCancelFightIfActiveHouse = engine.DiscardTopOfDeckAndCancelFightIfActiveHouse
+	DiscardTopOfEachDeckAndDestroyByHouse       = engine.DiscardTopOfEachDeckAndDestroyByHouse
+	DiscardTopOfDeckAndRevealHandForAember      = engine.DiscardTopOfDeckAndRevealHandForAember
+	PlayTopOfDeckOfChosenHouse                  = engine.PlayTopOfDeckOfChosenHouse
+	Reveal                                      = engine.Reveal
 )
 
 // Using and choosing creatures.
 type (
-	OnChooseCreature = engine.OnChooseCreature
-	ReadyVerb        = engine.ReadyVerb
-	FightVerb        = engine.FightVerb
-	UseVerb          = engine.UseVerb
-	StunVerb         = engine.StunVerb
-	ExhaustVerb      = engine.ExhaustVerb
+	OnChooseCreature               = engine.OnChooseCreature
+	ReadyVerb                      = engine.ReadyVerb
+	FightVerb                      = engine.FightVerb
+	UseVerb                        = engine.UseVerb
+	StunVerb                       = engine.StunVerb
+	ExhaustVerb                    = engine.ExhaustVerb
+	UseFriendlyCardsOfHouse        = engine.UseFriendlyCardsOfHouse
+	TakeControl                    = engine.TakeControl
+	SwapWithFriendlyCreatureAndUse = engine.SwapWithFriendlyCreatureAndUse
 )
 
 // Composites and control flow.
 type (
 	Sequence        = engine.Sequence
+	Sentence        = engine.Sentence
 	ChooseOne       = engine.ChooseOne
 	ChooseHouseThen = engine.ChooseHouseThen
 	Conditional     = engine.Conditional
@@ -95,6 +105,7 @@ type (
 	OpponentAemberAtLeast     = engine.OpponentAemberAtLeast
 	OpponentAemberExactly     = engine.OpponentAemberExactly
 	OpponentAemberMoreThanYou = engine.OpponentAemberMoreThanYou
+	CardsPlayedOfHouseAtLeast = engine.CardsPlayedOfHouseAtLeast
 )
 
 // Counts feed an effect's Per, scaling it by a board quantity; InPlay doubles as
@@ -116,11 +127,13 @@ type (
 
 // Houses, keys, chains, and restrictions.
 type (
-	CannotFight              = engine.CannotFight
-	GrantFightForChosenHouse = engine.GrantFightForChosenHouse
-	ForceOpponentActiveHouse = engine.ForceOpponentActiveHouse
-	ForgeKey                 = engine.ForgeKey
-	GainChains               = engine.GainChains
+	CannotFight                               = engine.CannotFight
+	GrantFightForChosenHouse                  = engine.GrantFightForChosenHouse
+	ReadyAndBelongToHouseAfterYouPlayCreature = engine.ReadyAndBelongToHouseAfterYouPlayCreature
+	ForceOpponentActiveHouse                  = engine.ForceOpponentActiveHouse
+	ForgeKey                                  = engine.ForgeKey
+	GiveRemainingAemberAfterOpponentForgeKey  = engine.GiveRemainingAemberAfterOpponentForgeKey
+	GainChains                                = engine.GainChains
 )
 
 // Event groups the game events a lasting "for the remainder of the turn" effect

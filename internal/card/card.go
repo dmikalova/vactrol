@@ -25,7 +25,7 @@ type (
 	Definition = engine.CardDefinition
 	// Ability pairs a trigger with an effect.
 	Ability = engine.Ability
-	// StaticModifier is a continuous stat change applied by an upgrade.
+	// StaticModifier is a continuous stat change or replacement applied by an upgrade.
 	StaticModifier = engine.StaticModifier
 	// ConstantAbility is a continuous stat change a card applies to creatures in
 	// play. Its Target says which creatures it reaches (each creature when unset);

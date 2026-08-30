@@ -199,7 +199,10 @@ func (g *Game) resolveReaction(le LastingEffect, actor int, subject LocalID) {
 		g.State.Cards[subject].Exhausted = false
 		g.logf("%s is readied", g.Name(subject))
 	default: // actGainAember
-		g.State.Aember[actor] += int(le.Amount)
+		if capturer, ok := g.gainAember(actor, int(le.Amount)); ok {
+			g.logf("%s captures %d Æmber instead of %s gaining it (%s)", g.Name(capturer), le.Amount, g.names[actor], le.On.clause())
+			return
+		}
 		g.logf("%s gains %d Æmber (%s)", g.names[actor], le.Amount, le.On.clause())
 	}
 }

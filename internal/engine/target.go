@@ -393,7 +393,7 @@ func (t Target) filter(ctx *EffectContext, ids []LocalID) []LocalID {
 // onFlank reports whether a creature is on a flank of its battleline (its
 // leftmost or rightmost creature).
 func onFlank(ctx *EffectContext, id LocalID) bool {
-	bl := ctx.Resolver.Battleline(ctx.Resolver.Owner(id))
+	bl := battlelineContaining(ctx, id)
 	return len(bl) > 0 && (bl[0] == id || bl[len(bl)-1] == id)
 }
 
@@ -407,11 +407,11 @@ func isNeighbor(ctx *EffectContext, src, id LocalID) bool {
 	return false
 }
 
-// neighbors returns the creatures immediately adjacent to id in its owner's
+// neighbors returns the creatures immediately adjacent to id in its controller's
 // battleline — its left and right neighbors, when present. A card that is not in
 // a battleline has no neighbors.
 func neighbors(ctx *EffectContext, id LocalID) []LocalID {
-	bl := ctx.Resolver.Battleline(ctx.Resolver.Owner(id))
+	bl := battlelineContaining(ctx, id)
 	i := -1
 	for j, x := range bl {
 		if x == id {
@@ -430,6 +430,18 @@ func neighbors(ctx *EffectContext, id LocalID) []LocalID {
 		out = append(out, bl[i+1])
 	}
 	return out
+}
+
+func battlelineContaining(ctx *EffectContext, id LocalID) []LocalID {
+	for p := 0; p < 2; p++ {
+		bl := ctx.Resolver.Battleline(p)
+		for _, x := range bl {
+			if x == id {
+				return bl
+			}
+		}
+	}
+	return nil
 }
 
 // selectBase resolves the unfiltered base set chosen by Kind. Chosen kinds return

@@ -59,6 +59,24 @@ func (OpponentAemberMoreThanYou) Met(ctx *EffectContext) bool {
 	return ctx.Resolver.Aember(ctx.Opponent()) > ctx.Resolver.Aember(ctx.Controller)
 }
 
+// CardsPlayedOfHouseAtLeast is met when the controller has played at least Amount
+// cards of House this turn.
+type CardsPlayedOfHouseAtLeast struct {
+	House  House
+	Amount int
+}
+
+// CondText renders the condition, e.g. "if you have played 7 or more Sanctum
+// cards this turn".
+func (c CardsPlayedOfHouseAtLeast) CondText() string {
+	return fmt.Sprintf("if you have played %d or more %s cards this turn", c.Amount, c.House)
+}
+
+// Met reports whether the controller's house-specific play count reaches Amount.
+func (c CardsPlayedOfHouseAtLeast) Met(ctx *EffectContext) bool {
+	return ctx.Resolver.CardsPlayedOfHouseThisTurn(ctx.Controller, c.House) >= c.Amount
+}
+
 // Conditional resolves Then only when Cond is met. It renders as "<cond>, <then>",
 // e.g. "if your opponent has 7 Æmber or more, your opponent loses 4 Æmber".
 type Conditional struct {

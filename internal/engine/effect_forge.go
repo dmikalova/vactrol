@@ -1,13 +1,42 @@
 package engine
 
-// ForgeKey has the controller forge a key by paying its current cost, if they can
-// afford it — firing "after you forge a key" abilities and, on the final key,
-// winning the game. Cards use it to forge outside the normal start-of-turn step,
-// e.g. "Lose 1 Æmber, and forge a key at current cost."
-type ForgeKey struct{}
+// ForgeKey has the controller forge a key outside the normal start-of-turn step.
+// By default they pay the current key cost, if they can afford it; FreeOfCost
+// forges without paying. Both paths fire "after you forge a key" abilities and,
+// on the final key, win the game.
+type ForgeKey struct {
+	FreeOfCost bool
+}
 
 // Text renders the effect.
-func (ForgeKey) Text() string { return "forge a key at current cost" }
+func (e ForgeKey) Text() string {
+	if e.FreeOfCost {
+		return "forge a key at no cost"
+	}
+	return "forge a key at current cost"
+}
 
 // Resolve forges one key for the controller if affordable.
-func (ForgeKey) Resolve(ctx *EffectContext) { ctx.Resolver.ForgeKey(ctx.Controller) }
+func (e ForgeKey) Resolve(ctx *EffectContext) {
+	if e.FreeOfCost {
+		ctx.Resolver.ForgeKeyFree(ctx.Controller)
+		return
+	}
+	ctx.Resolver.ForgeKey(ctx.Controller)
+}
+
+// GiveRemainingAemberAfterOpponentForgeKey arms Interdimensional Graft's delayed
+// forge penalty: if the opponent forges a key during their next turn, they give
+// their remaining Æmber to the controller. It is durable across this turn's end,
+// but expires at the end of that opponent's next turn if they did not forge.
+type GiveRemainingAemberAfterOpponentForgeKey struct{}
+
+// Text renders the effect.
+func (GiveRemainingAemberAfterOpponentForgeKey) Text() string {
+	return "if an opponent forges a key on their next turn, they must give you their remaining Æmber"
+}
+
+// Resolve arms the transfer for the opponent's next turn.
+func (GiveRemainingAemberAfterOpponentForgeKey) Resolve(ctx *EffectContext) {
+	ctx.Resolver.GiveRemainingAemberAfterKeyForgeNextTurn(ctx.Opponent(), ctx.Controller)
+}

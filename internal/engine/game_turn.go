@@ -32,6 +32,13 @@ func (g *Game) BeginTurn(player int) {
 	g.State.ActiveHouse = HouseNone
 	g.State.Turn++
 	g.State.CardsPlayedThisTurn[player] = 0
+	g.State.CardsPlayedByHouseThisTurn[player] = [NumHouses]int{}
+	g.State.OffHousePlaysUsedThisTurn[player] = [NumHouses]int{}
+	for p := 0; p < 2; p++ {
+		for _, id := range g.State.Battleline[p].slice() {
+			g.State.Cards[id].TimesUsedThisTurn = 0
+		}
+	}
 	// A fight bar armed on a previous turn becomes active for this player now.
 	if g.State.CannotFightNext[player] {
 		g.State.CannotFight[player] = true
@@ -40,6 +47,11 @@ func (g *Game) BeginTurn(player int) {
 	// A forced active house armed on a previous turn takes effect for this player now.
 	g.State.ForcedHouse[player] = g.State.ForcedHouseNext[player]
 	g.State.ForcedHouseNext[player] = HouseNone
+	// A key-forge Æmber transfer armed on a previous turn takes effect for this player now.
+	g.State.KeyForgeAemberGive[player] = g.State.KeyForgeAemberGiveNext[player]
+	g.State.KeyForgeAemberGiveBeneficiary[player] = g.State.KeyForgeAemberGiveBeneficiaryNext[player]
+	g.State.KeyForgeAemberGiveNext[player] = false
+	g.State.KeyForgeAemberGiveBeneficiaryNext[player] = 0
 	g.logf("--- %s begins turn %d ---", g.names[player], g.State.Turn)
 	g.forgeKey(player)
 }
@@ -96,12 +108,15 @@ func (g *Game) EndTurn(player int) {
 	for _, id := range g.allInPlay(player) {
 		core := &g.State.Cards[id]
 		core.Exhausted = false
+		core.TempHouse = HouseNone
 		if g.cat.def(id).Type == Creature {
 			core.ArmorRemaining = int16(g.armor(id))
 		}
 	}
 	g.State.CannotFight[player] = false
 	g.State.MayFightHouse[player] = HouseNone
+	g.State.KeyForgeAemberGive[player] = false
+	g.State.KeyForgeAemberGiveBeneficiary[player] = 0
 	g.clearLasting(player)
 	g.drawStep(player)
 	g.logf("%s ends their turn", g.names[player])
@@ -146,6 +161,16 @@ func (g *Game) ForceActiveHouseNextTurn(player int, h House) {
 	g.logf("%s must choose house %s next turn", g.names[player], h)
 }
 
+// GiveRemainingAemberAfterKeyForgeNextTurn arms a one-time transfer: after forger
+// forges a key during their next turn, they give their remaining Æmber to
+// beneficiary. BeginTurn promotes the armed transfer; EndTurn clears it if no key
+// was forged.
+func (g *Game) GiveRemainingAemberAfterKeyForgeNextTurn(forger, beneficiary int) {
+	g.State.KeyForgeAemberGiveNext[forger] = true
+	g.State.KeyForgeAemberGiveBeneficiaryNext[forger] = int8(beneficiary)
+	g.logf("%s must give %s their remaining Æmber after forging a key next turn", g.names[forger], g.names[beneficiary])
+}
+
 // Forge a key: at the start of your turn you forge a single key if you can pay
 // its current cost — 6 Æmber by default. A player forges at most one key per turn.
 // Keys are the win condition — forge your third key and you win the game.
@@ -161,16 +186,43 @@ func (g *Game) forgeKey(player int) {
 		return
 	}
 	g.State.Aember[player] -= cost
+	g.finishForgeKey(player)
+}
+
+// forgeKeyFree forges one key without paying its current cost.
+func (g *Game) forgeKeyFree(player int) {
+	g.finishForgeKey(player)
+}
+
+// finishForgeKey records a newly forged key, lets the player choose its colour,
+// fires "after you forge a key" abilities, and checks for the win.
+func (g *Game) finishForgeKey(player int) {
 	g.State.Keys[player]++
 	g.chooseKeyColor(player)
 	g.logf("%s forges a key (%d/%d)", g.names[player], g.State.Keys[player], KeysToWin)
 	for _, id := range g.allInPlay(player) {
 		g.triggerAbilities(id, TriggerAfterForgeKey, 0, false)
 	}
+	g.resolveKeyForgeAemberGive(player)
 	if g.State.Keys[player] >= KeysToWin {
 		g.State.Winner = player
 		g.logf("%s wins the game!", g.names[player])
 	}
+}
+
+// resolveKeyForgeAemberGive resolves and clears the one-time Interdimensional
+// Graft-style transfer that became active for this player's turn.
+func (g *Game) resolveKeyForgeAemberGive(player int) {
+	if !g.State.KeyForgeAemberGive[player] {
+		return
+	}
+	beneficiary := int(g.State.KeyForgeAemberGiveBeneficiary[player])
+	amount := g.State.Aember[player]
+	g.State.Aember[player] = 0
+	g.State.Aember[beneficiary] += amount
+	g.State.KeyForgeAemberGive[player] = false
+	g.State.KeyForgeAemberGiveBeneficiary[player] = 0
+	g.logf("%s gives %d Æmber to %s after forging a key", g.names[player], amount, g.names[beneficiary])
 }
 
 // chooseKeyColor asks the player which colour the key they just forged should be,

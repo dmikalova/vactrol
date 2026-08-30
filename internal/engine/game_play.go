@@ -1,8 +1,8 @@
 package engine
 
-// This file holds playing a card from hand: creatures, artifacts, actions, and
-// upgrades, plus discarding from hand and the shared checks (house match, taking
-// a card of the right type, granting its Æmber pips).
+// This file holds playing a card: creatures, artifacts, actions, and upgrades,
+// plus discarding from hand and the shared checks (house match, taking a card of
+// the right type, granting its Æmber pips).
 
 // PlayCreature plays a creature from hand onto the battleline. flankLeft places it
 // on the left flank; otherwise it goes to the right flank.
@@ -10,24 +10,15 @@ func (g *Game) PlayCreature(player, handIndex int, flankLeft bool) (LocalID, err
 	if g.cannotPlayCreatures(player) {
 		return 0, ErrCannotPlayCreature
 	}
-	id, err := g.takeFromHand(player, handIndex, Creature)
+	id, err := g.validateHandPlay(player, handIndex, Creature)
 	if err != nil {
 		return 0, err
 	}
-	core := &g.State.Cards[id]
-	core.Exhausted = true // enters play exhausted; readies during the end-of-turn ready step
-	core.ArmorRemaining = int16(g.armor(id))
-	if flankLeft {
-		g.State.Battleline[player].addFront(id)
-	} else {
-		g.State.Battleline[player].add(id)
-	}
-	g.logf("%s plays %s to the battleline", g.names[player], g.Name(id))
-	g.applyAemberBonus(id)
-	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
-	g.fireCreatureEnters(id)
-	g.fireLasting(EventCreaturePlayed, player, id)
-	return id, nil
+	def := g.cat.def(id)
+	return g.playCardFromZone(player, id, func() { g.State.Hand[player].removeAt(handIndex) }, playCardOptions{
+		flankLeft:                flankLeft,
+		consumeOffHousePlayGrant: g.usesOffHousePlayGrant(player, def),
+	})
 }
 
 // PlayArtifact plays an artifact from hand into the artifact row. If the opponent
@@ -38,18 +29,10 @@ func (g *Game) PlayArtifact(player, handIndex int) (LocalID, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := g.chargeToll(player, TollPlayArtifact); err != nil {
-		return 0, err
-	}
-	g.State.Hand[player].removeAt(handIndex)
-	g.State.CardsPlayedThisTurn[player]++
-	g.State.Cards[id].Exhausted = true // enters play exhausted; readies during the end-of-turn ready step
-	g.State.Artifacts[player].add(id)
-	g.logf("%s plays artifact %s", g.names[player], g.Name(id))
-	g.applyAemberBonus(id)
-	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
-	g.fireArtifactPlayed(player, id)
-	return id, nil
+	def := g.cat.def(id)
+	return g.playCardFromZone(player, id, func() { g.State.Hand[player].removeAt(handIndex) }, playCardOptions{
+		consumeOffHousePlayGrant: g.usesOffHousePlayGrant(player, def),
+	})
 }
 
 // chargeToll makes player pay every toll an opponent's in-play card imposes for
@@ -79,15 +62,15 @@ func (g *Game) chargeToll(player int, action TollAction) error {
 // PlayAction plays an action card: its Æmber bonus and "Play:" abilities resolve,
 // then it goes to the discard pile.
 func (g *Game) PlayAction(player, handIndex int) error {
-	id, err := g.takeFromHand(player, handIndex, Action)
+	id, err := g.validateHandPlay(player, handIndex, Action)
 	if err != nil {
 		return err
 	}
-	g.logf("%s plays action %s", g.names[player], g.Name(id))
-	g.applyAemberBonus(id)
-	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
-	g.State.Discard[player].add(id)
-	return nil
+	def := g.cat.def(id)
+	_, err = g.playCardFromZone(player, id, func() { g.State.Hand[player].removeAt(handIndex) }, playCardOptions{
+		consumeOffHousePlayGrant: g.usesOffHousePlayGrant(player, def),
+	})
+	return err
 }
 
 // DiscardFromHand discards a card of the active house from a player's hand,
@@ -134,23 +117,132 @@ func (g *Game) PlayUpgrade(player, handIndex int) (LocalID, error) {
 	if def.Type != Upgrade {
 		return 0, ErrWrongType
 	}
-	if !g.inActiveHouse(def) {
+	if !g.mayPlayFromHand(player, def) {
 		return 0, ErrWrongHouse
 	}
-	candidates := append(g.battlelineCopy(player), g.battlelineCopy(1-player)...)
-	host, ok := g.pickCreature(player, g.Name(id), "Choose a creature to upgrade", candidates)
-	if !ok {
-		return 0, ErrNoTarget
+	return g.playCardFromZone(player, id, func() { hand.removeAt(handIndex) }, playCardOptions{
+		consumeOffHousePlayGrant: g.usesOffHousePlayGrant(player, def),
+	})
+}
+
+// PlayTopOfDeckIfHouse reveals the controller's top deck card and, when it
+// belongs to house, plays it from the deck. A non-matching card stays on top.
+func (g *Game) PlayTopOfDeckIfHouse(player int, house House) {
+	deck := &g.State.Deck[player]
+	if deck.Count == 0 {
+		return
 	}
-	hand.removeAt(handIndex)
-	g.State.CardsPlayedThisTurn[player]++
+	id := deck.IDs[0]
+	g.logf("%s reveals %s", g.names[player], g.Name(id))
+	if g.cat.def(id).House != house {
+		return
+	}
+	_, _ = g.playCardFromZone(player, id, func() { deck.removeAt(0) }, playCardOptions{})
+}
+
+type playCardOptions struct {
+	flankLeft                bool
+	consumeOffHousePlayGrant bool
+}
+
+// playCardFromZone resolves a card play after the source zone has identified the
+// card. It performs the shared play gates, removes the card only once it can be
+// played, records the play, then dispatches to the card-type-specific placement.
+func (g *Game) playCardFromZone(player int, id LocalID, remove func(), opts playCardOptions) (LocalID, error) {
+	if g.State.Winner >= 0 {
+		return 0, ErrGameOver
+	}
+	if g.State.ActivePlayer != player {
+		return 0, ErrNotActivePlayer
+	}
+	if g.cannotPlayCard(player) {
+		return 0, ErrCardPlayLimit
+	}
+	def := g.cat.def(id)
+	switch def.Type {
+	case Creature:
+		if g.cannotPlayCreatures(player) {
+			return 0, ErrCannotPlayCreature
+		}
+		g.recordCardPlayed(player, def, opts)
+		remove()
+		g.playCreatureCard(player, id, opts.flankLeft)
+		return id, nil
+	case Artifact:
+		if err := g.chargeToll(player, TollPlayArtifact); err != nil {
+			return 0, err
+		}
+		g.recordCardPlayed(player, def, opts)
+		remove()
+		g.playArtifactCard(player, id)
+		return id, nil
+	case Action:
+		g.recordCardPlayed(player, def, opts)
+		remove()
+		g.playActionCard(player, id)
+		return id, nil
+	case Upgrade:
+		candidates := append(g.battlelineCopy(player), g.battlelineCopy(1-player)...)
+		host, ok := g.pickCreature(player, g.Name(id), "Choose a creature to upgrade", candidates)
+		if !ok {
+			return 0, ErrNoTarget
+		}
+		g.recordCardPlayed(player, def, opts)
+		remove()
+		g.playUpgradeCard(player, id, host, def)
+		return host, nil
+	default:
+		return 0, ErrWrongType
+	}
+}
+
+// playCreatureCard places a creature on a flank and fires the standard play
+// sequence for a creature already removed from its previous zone.
+func (g *Game) playCreatureCard(player int, id LocalID, flankLeft bool) {
+	core := &g.State.Cards[id]
+	core.Exhausted = true // enters play exhausted; readies during the end-of-turn ready step
+	core.ArmorRemaining = int16(g.armor(id))
+	if flankLeft {
+		g.State.Battleline[player].addFront(id)
+	} else {
+		g.State.Battleline[player].add(id)
+	}
+	g.logf("%s plays %s to the battleline", g.names[player], g.Name(id))
+	g.applyAemberBonus(id)
+	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
+	g.fireCreatureEnters(id)
+	g.fireLasting(EventCreaturePlayed, player, id)
+}
+
+// playArtifactCard places an artifact and fires the standard play sequence for an
+// artifact already removed from its previous zone.
+func (g *Game) playArtifactCard(player int, id LocalID) {
+	g.State.Cards[id].Exhausted = true // enters play exhausted; readies during the end-of-turn ready step
+	g.State.Artifacts[player].add(id)
+	g.logf("%s plays artifact %s", g.names[player], g.Name(id))
+	g.applyAemberBonus(id)
+	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
+	g.fireArtifactPlayed(player, id)
+}
+
+// playActionCard resolves and discards an action already removed from its previous
+// zone.
+func (g *Game) playActionCard(player int, id LocalID) {
+	g.logf("%s plays action %s", g.names[player], g.Name(id))
+	g.applyAemberBonus(id)
+	g.triggerAbilities(id, TriggerAfterPlay, 0, false)
+	g.State.Discard[player].add(id)
+}
+
+// playUpgradeCard attaches an upgrade to host and fires its standard play sequence
+// after the upgrade has been removed from its previous zone.
+func (g *Game) playUpgradeCard(player int, id, host LocalID, def *CardDefinition) {
 	g.applyAemberBonus(id)
 	hostCore := &g.State.Cards[host]
 	hostCore.Upgrades[hostCore.UpgradeCount] = id
 	hostCore.UpgradeCount++
 	g.logf("%s attaches %s to %s", g.names[player], g.Name(id), g.Name(host))
-	g.fireUpgradePlay(host, def)
-	return host, nil
+	g.fireUpgradePlay(host, id, def)
 }
 
 // DiscardCardFromHand moves a specific card from a player's hand to their discard
@@ -176,22 +268,56 @@ func (g *Game) inActiveHouse(def *CardDefinition) bool {
 	return g.manual || g.State.ActiveHouse == HouseNone || def.House == g.State.ActiveHouse
 }
 
-// takeFromHand validates and removes a card of the wanted type from a hand.
-func (g *Game) takeFromHand(player, handIndex int, want CardType) (LocalID, error) {
-	id, err := g.validateHandPlay(player, handIndex, want)
-	if err != nil {
-		return 0, err
+// mayPlayFromHand reports whether player may play a hand card now by active-house
+// match or by a remaining continuous off-house play grant they control.
+func (g *Game) mayPlayFromHand(player int, def *CardDefinition) bool {
+	if g.inActiveHouse(def) {
+		return true
 	}
-	g.State.Hand[player].removeAt(handIndex)
+	return g.offHousePlayGrantRemaining(player, def.House) > 0
+}
+
+// usesOffHousePlayGrant reports whether playing def from hand would spend one of
+// player's continuous off-house permissions instead of matching the active house.
+func (g *Game) usesOffHousePlayGrant(player int, def *CardDefinition) bool {
+	return !g.inActiveHouse(def) && g.offHousePlayGrantRemaining(player, def.House) > 0
+}
+
+// offHousePlayGrantRemaining returns how many unspent permissions player controls
+// for playing a card of house while house is not their active house.
+func (g *Game) offHousePlayGrantRemaining(player int, house House) int {
+	limit := 0
+	if g.State.ActiveHouse != house {
+		for _, id := range g.allInPlay(player) {
+			if grant := g.cat.def(id).OffHousePlayGrant; grant != HouseNone && grant == house {
+				limit++
+			}
+		}
+	}
+	used := 0
+	if int(house) < NumHouses {
+		used = g.State.OffHousePlaysUsedThisTurn[player][house]
+	}
+	if used >= limit {
+		return 0
+	}
+	return limit - used
+}
+
+// recordCardPlayed updates the per-turn card-play counters, including an off-house
+// grant if the hand play was legal only because of that continuous permission.
+func (g *Game) recordCardPlayed(player int, def *CardDefinition, opts playCardOptions) {
+	if opts.consumeOffHousePlayGrant {
+		g.State.OffHousePlaysUsedThisTurn[player][def.House]++
+	}
 	g.State.CardsPlayedThisTurn[player]++
-	return id, nil
+	g.State.CardsPlayedByHouseThisTurn[player][def.House]++
 }
 
 // validateHandPlay runs the read-only checks that a hand card may be played —
 // game not over, active player, no card-play limit reached, index in hand, right
-// type, active house — and returns the card without mutating the hand. It is the
-// shared validation step for takeFromHand and for plays that must charge a cost
-// (PlayArtifact) only once the play is otherwise legal.
+// type, and play permission — and returns the card without mutating the hand. It
+// is the shared validation step before the source zone actually removes the card.
 func (g *Game) validateHandPlay(player, handIndex int, want CardType) (LocalID, error) {
 	if g.State.Winner >= 0 {
 		return 0, ErrGameOver
@@ -211,7 +337,7 @@ func (g *Game) validateHandPlay(player, handIndex int, want CardType) (LocalID, 
 	if def.Type != want {
 		return 0, ErrWrongType
 	}
-	if !g.inActiveHouse(def) {
+	if !g.mayPlayFromHand(player, def) {
 		return 0, ErrWrongHouse
 	}
 	return id, nil
@@ -235,7 +361,7 @@ func (g *Game) CanPlay(player int, id LocalID) error {
 	if g.cannotPlayCard(player) {
 		return ErrCardPlayLimit
 	}
-	if !g.inActiveHouse(def) {
+	if !g.mayPlayFromHand(player, def) {
 		return ErrWrongHouse
 	}
 	if def.Type == Upgrade &&
@@ -250,7 +376,10 @@ func (g *Game) applyAemberBonus(id LocalID) {
 	def := g.cat.def(id)
 	if def.AemberBonus > 0 {
 		o := g.owner(id)
-		g.State.Aember[o] += def.AemberBonus
+		if capturer, ok := g.gainAember(o, def.AemberBonus); ok {
+			g.logf("%s captures %d Æmber from %s's bonus", g.Name(capturer), def.AemberBonus, def.Name)
+			return
+		}
 		g.logf("%s gains %d Æmber from %s", g.names[o], def.AemberBonus, def.Name)
 	}
 }

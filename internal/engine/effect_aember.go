@@ -44,7 +44,10 @@ func (e GainAember) Resolve(ctx *EffectContext) {
 	if e.Per != nil {
 		amount *= e.Per.Value(ctx)
 	}
-	ctx.Resolver.SetAember(p, ctx.Resolver.Aember(p)+amount)
+	if capturer, ok := ctx.Resolver.GainAember(p, amount); ok {
+		ctx.Resolver.Logf("%s captures %d Æmber instead of %s gaining it", ctx.Resolver.Name(capturer), amount, ctx.Resolver.PlayerName(p))
+		return
+	}
 	ctx.Resolver.Logf("%s gains %d Æmber", ctx.Resolver.PlayerName(p), amount)
 }
 

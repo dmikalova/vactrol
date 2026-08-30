@@ -78,6 +78,7 @@ func TestRequiredTargetValidation(t *testing.T) {
 		{"Exalt", Exalt{Times: 1}, Exalt{Times: 1, Target: this}},
 		{"Exhaust", Exhaust{}, Exhaust{Target: this}},
 		{"Ready", Ready{}, Ready{Target: this}},
+		{"ReadyIfFirstUse", ReadyIfFirstUse{}, ReadyIfFirstUse{Target: this}},
 		{"ReadyCreatures", ReadyCreatures{}, ReadyCreatures{Target: this}},
 		{"Stun", Stun{}, Stun{Target: this}},
 		{"Unstun", Unstun{}, Unstun{Target: this}},

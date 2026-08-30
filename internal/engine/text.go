@@ -9,6 +9,11 @@ import (
 // RenderAbility renders a single triggered ability to its printed card line,
 // e.g. "After you forge a key, deal 2 damage to each enemy creature."
 func RenderAbility(a Ability) string {
+	if e, ok := a.Effect.(abilityTextOverride); ok {
+		if text, ok := e.abilityText(a.Trigger); ok {
+			return punctuate(capitalizeFirst(text))
+		}
+	}
 	if a.Trigger == TriggerEntersPlay {
 		return SelfName + " enters play " + enterStateWord(a.Effect) + "."
 	}
@@ -18,6 +23,13 @@ func RenderAbility(a Ability) string {
 		body = capitalizeFirst(body)
 	}
 	return prefix + punctuate(body)
+}
+
+// abilityTextOverride is implemented by effects whose printed text includes their
+// own trigger wording because they narrow a broad engine event into a printed
+// trigger.
+type abilityTextOverride interface {
+	abilityText(trigger Trigger) (string, bool)
 }
 
 // enterStateWord renders the state an "enters play" ability leaves its creature in,
@@ -54,7 +66,15 @@ func punctuate(body string) string {
 // renderAbilityLine renders an ability with its source card's self-references
 // (the SelfName placeholder) resolved to the card's name.
 func renderAbilityLine(def *CardDefinition, a Ability) string {
-	return strings.ReplaceAll(RenderAbility(a), SelfName, def.Name)
+	return abilityTextWithNames(RenderAbility(a), def.Name, def.Name)
+}
+
+// abilityTextWithNames resolves the two placeholders an ability line may use: the
+// card/creature named by "this", and, for an Upgrade resolving on its host, the
+// Upgrade's own name.
+func abilityTextWithNames(line, self, upgrade string) string {
+	line = strings.ReplaceAll(line, SelfName, self)
+	return strings.ReplaceAll(line, UpgradeName, upgrade)
 }
 
 // abilityLines renders a card's triggered abilities, one printed line each,
@@ -74,12 +94,12 @@ func abilityLines(def *CardDefinition) []string {
 		if ab.Trigger == TriggerAfterReap && i+1 < len(abs) &&
 			abs[i+1].Trigger == TriggerAfterFight &&
 			abs[i+1].Effect.Text() == ab.Effect.Text() {
-			body := capitalizeFirst(strings.ReplaceAll(ab.Effect.Text(), SelfName, self))
+			body := capitalizeFirst(abilityTextWithNames(ab.Effect.Text(), self, def.Name))
 			lines = append(lines, "Fight/Reap: "+body+".")
 			i++ // the Fight partner prints as part of this line
 			continue
 		}
-		lines = append(lines, strings.ReplaceAll(RenderAbility(ab), SelfName, self))
+		lines = append(lines, abilityTextWithNames(RenderAbility(ab), self, def.Name))
 	}
 	return lines
 }
@@ -165,9 +185,13 @@ func cardRules(def *CardDefinition) []string {
 	if s := keyCostText(def.KeyCostChange); s != "" {
 		rules = append(rules, s)
 	}
-	if s := staticText(def.Static); s != "" {
+	if s := offHousePlayGrantText(def.OffHousePlayGrant); s != "" {
 		rules = append(rules, s)
 	}
+	if s := captureOpponentAemberText(def); s != "" {
+		rules = append(rules, s)
+	}
+	rules = append(rules, upgradeStaticLines(def)...)
 	if s := constantText(def); s != "" {
 		rules = append(rules, s)
 	}
@@ -197,7 +221,7 @@ func CardDocComment(def *CardDefinition) string {
 }
 
 // staticText renders an Upgrade's continuous modifier, e.g.
-// "This creature gets +5 power."
+// "This creature gains +5 power."
 func staticText(m StaticModifier) string {
 	var parts []string
 	if m.PowerBonus != 0 {
@@ -221,13 +245,49 @@ func staticText(m StaticModifier) string {
 	return "This creature gains " + strings.Join(parts, " and ") + "."
 }
 
-// grantedText renders the triggered abilities an Upgrade grants its host, one
-// line each, e.g. `This creature gains, "Reap: Steal 1 Æmber."`. Self-references
-// resolve to "this creature" since the host is unknown when the Upgrade prints.
+// upgradeStaticLines renders an Upgrade's continuous modifier and replacement
+// text, combining them when both are printed on the same Upgrade.
+func upgradeStaticLines(def *CardDefinition) []string {
+	static := staticText(def.Static)
+	replacement := destructionReplacementText(def)
+	switch {
+	case static != "" && replacement != "":
+		return []string{strings.TrimSuffix(static, ".") + ` and, "` + replacement + `."`}
+	case static != "":
+		return []string{static}
+	case replacement != "":
+		return []string{`This creature gains, "` + replacement + `."`}
+	default:
+		return nil
+	}
+}
+
+// destructionReplacementText renders an Upgrade-granted replacement for its host
+// being destroyed, naming the Upgrade that is destroyed instead.
+func destructionReplacementText(def *CardDefinition) string {
+	if !def.Static.PreventsDestruction {
+		return ""
+	}
+	return "If this creature would be destroyed, instead fully heal it and destroy " + def.Name
+}
+
+// grantedText renders the triggered abilities an Upgrade grants its host,
+// combining matching Reap/Fight pairs into the printed "Fight/Reap:" shorthand,
+// e.g. `This creature gains, "Reap: Steal 1 Æmber."`. Self-references resolve to
+// "this creature" since the host is unknown when the Upgrade prints.
 func grantedText(m StaticModifier) []string {
 	lines := make([]string, 0, len(m.Granted))
-	for _, ab := range m.Granted {
-		body := strings.ReplaceAll(RenderAbility(ab), SelfName, "this creature")
+	for i := 0; i < len(m.Granted); i++ {
+		ab := m.Granted[i]
+		if ab.Trigger == TriggerAfterReap && i+1 < len(m.Granted) &&
+			m.Granted[i+1].Trigger == TriggerAfterFight &&
+			m.Granted[i+1].Effect.Text() == ab.Effect.Text() {
+			body := capitalizeFirst(abilityTextWithNames(ab.Effect.Text(), "this creature", "this upgrade"))
+			lines = append(lines, `This creature gains, "Fight/Reap: `+body+`."`)
+			i++ // the Fight partner prints as part of this line
+			continue
+		}
+		body := abilityTextWithNames(RenderAbility(ab), "this creature", "this upgrade")
 		lines = append(lines, `This creature gains, "`+body+`"`)
 	}
 	if s := keyCostText(m.KeyCostChange); s != "" {
@@ -269,7 +329,7 @@ func constantGrantedText(def *CardDefinition) []string {
 	subject := capitalizeFirst(c.target().Text())
 	lines := make([]string, 0, len(c.Granted))
 	for _, ab := range c.Granted {
-		body := strings.ReplaceAll(RenderAbility(ab), SelfName, "this creature")
+		body := abilityTextWithNames(RenderAbility(ab), "this creature", def.Name)
 		lines = append(lines, subject+` gains, "`+body+`"`)
 	}
 	return lines
@@ -317,6 +377,25 @@ func keyCostText(kc KeyCostChange) string {
 		whose = "Each player's"
 	}
 	return fmt.Sprintf("%s keys cost %+d Æmber.", whose, kc.amount)
+}
+
+// offHousePlayGrantText renders a continuous permission to play one card of a
+// house while that house is not active, e.g. Witch of the Wilds.
+func offHousePlayGrantText(house House) string {
+	if house == HouseNone {
+		return ""
+	}
+	return fmt.Sprintf("During each turn in which %s is not your active house, you may play one %s card.", house, house)
+}
+
+// captureOpponentAemberText renders a static replacement that captures opponent
+// gains, e.g. "If Æmber would be added to your opponent's pool, instead Ether
+// Spider captures it."
+func captureOpponentAemberText(def *CardDefinition) string {
+	if !def.CapturesOpponentAember {
+		return ""
+	}
+	return "If Æmber would be added to your opponent's pool, instead " + def.Name + " captures it."
 }
 
 // keywordText renders a card's keywords as a single leading line, e.g.
